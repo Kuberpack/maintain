@@ -1,8 +1,6 @@
-import uuid
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from app.models import UserRole
+from app.schemas.users import UserPublic
 
 
 class PinLoginRequest(BaseModel):
@@ -13,16 +11,6 @@ class PinLoginRequest(BaseModel):
 class PasswordLoginRequest(BaseModel):
     email: str
     password: str = Field(min_length=1)
-
-
-class UserPublic(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    role: UserRole
-    email: str | None = None
-    phone_number: str | None = None
 
 
 class TokenResponse(BaseModel):

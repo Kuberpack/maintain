@@ -50,20 +50,26 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    # passive_deletes=True on all five: without it, SQLAlchemy's default
+    # ORM-level delete behavior loads these collections and proactively sets
+    # their (nullable) FK columns to NULL before deleting the user -- silently
+    # wiping audit-trail attribution instead of letting the database's
+    # RESTRICT constraint reject the delete. passive_deletes defers entirely
+    # to the database's FK behavior.
     completed_task_instances: Mapped[list["TaskInstance"]] = relationship(
-        foreign_keys="TaskInstance.completed_by", back_populates="completed_by_user"
+        foreign_keys="TaskInstance.completed_by", back_populates="completed_by_user", passive_deletes=True
     )
     rescheduled_task_instances: Mapped[list["TaskInstance"]] = relationship(
-        foreign_keys="TaskInstance.rescheduled_by", back_populates="rescheduled_by_user"
+        foreign_keys="TaskInstance.rescheduled_by", back_populates="rescheduled_by_user", passive_deletes=True
     )
     part_replacements: Mapped[list["PartReplacement"]] = relationship(
-        foreign_keys="PartReplacement.replaced_by", back_populates="replaced_by_user"
+        foreign_keys="PartReplacement.replaced_by", back_populates="replaced_by_user", passive_deletes=True
     )
     reported_repair_logs: Mapped[list["RepairLog"]] = relationship(
-        foreign_keys="RepairLog.reported_by", back_populates="reported_by_user"
+        foreign_keys="RepairLog.reported_by", back_populates="reported_by_user", passive_deletes=True
     )
     resolved_repair_logs: Mapped[list["RepairLog"]] = relationship(
-        foreign_keys="RepairLog.resolved_by", back_populates="resolved_by_user"
+        foreign_keys="RepairLog.resolved_by", back_populates="resolved_by_user", passive_deletes=True
     )
 
 

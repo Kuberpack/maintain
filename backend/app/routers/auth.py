@@ -5,7 +5,8 @@ from app.core.deps import get_current_user
 from app.core.security import create_access_token, verify_secret
 from app.database import get_db
 from app.models import User
-from app.schemas.auth import PasswordLoginRequest, PinLoginRequest, TokenResponse, UserPublic
+from app.schemas.auth import PasswordLoginRequest, PinLoginRequest, TokenResponse
+from app.schemas.users import UserPublic
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

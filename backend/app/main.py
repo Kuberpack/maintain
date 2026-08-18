@@ -4,7 +4,15 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.database import engine
-from app.routers import auth
+from app.routers import (
+    auth,
+    machines,
+    part_replacements,
+    repair_logs,
+    task_instances,
+    task_types,
+    users,
+)
 
 settings = get_settings()
 
@@ -19,6 +27,12 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(machines.router)
+app.include_router(task_types.router)
+app.include_router(users.router)
+app.include_router(task_instances.router)
+app.include_router(repair_logs.router)
+app.include_router(part_replacements.router)
 
 
 @app.get("/health")

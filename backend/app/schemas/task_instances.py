@@ -36,3 +36,10 @@ class TaskInstancePublic(BaseModel):
     notes: str | None
     rescheduled_by: uuid.UUID | None
     photo_url: str | None
+
+
+class TaskInstanceMarkDoneResponse(BaseModel):
+    completed: TaskInstancePublic
+    # The auto-generated next occurrence, or None for a non-recurring
+    # (e.g. repair) task type -- see app.services.scheduling.
+    next: TaskInstancePublic | None

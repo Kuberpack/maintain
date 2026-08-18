@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -11,9 +10,11 @@ from app.models import TaskInstance, TaskStatus, TaskType, User, UserRole
 from app.schemas.task_instances import (
     TaskInstanceCreate,
     TaskInstanceMarkDone,
+    TaskInstanceMarkDoneResponse,
     TaskInstancePublic,
     TaskInstanceReschedule,
 )
+from app.services.scheduling import complete_task_instance
 
 router = APIRouter(prefix="/task-instances", tags=["task_instances"])
 
@@ -57,27 +58,22 @@ def create_task_instance(
     return task_instance
 
 
-@router.patch("/{task_instance_id}/mark-done", response_model=TaskInstancePublic)
+@router.patch("/{task_instance_id}/mark-done", response_model=TaskInstanceMarkDoneResponse)
 def mark_task_instance_done(
     task_instance_id: uuid.UUID,
     payload: TaskInstanceMarkDone,
     db: Session = Depends(get_db),
     current_user: User = Depends(_do_work_roles),
-) -> TaskInstance:
+) -> TaskInstanceMarkDoneResponse:
     task_instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
-    task_instance.status = TaskStatus.done
-    task_instance.completed_at = datetime.now(timezone.utc)
-    task_instance.completed_by = current_user.id
-    if payload.notes is not None:
-        task_instance.notes = payload.notes
-    if payload.photo_url is not None:
-        task_instance.photo_url = payload.photo_url
-    # Generating the next due task_instance from the recurring interval is
-    # the scheduling step's job (kept in one place there, not duplicated
-    # here or in any other endpoint).
+    next_instance = complete_task_instance(
+        db, task_instance, current_user.id, notes=payload.notes, photo_url=payload.photo_url
+    )
     db.commit()
     db.refresh(task_instance)
-    return task_instance
+    if next_instance is not None:
+        db.refresh(next_instance)
+    return TaskInstanceMarkDoneResponse(completed=task_instance, next=next_instance)
 
 
 @router.patch("/{task_instance_id}/reschedule", response_model=TaskInstancePublic)

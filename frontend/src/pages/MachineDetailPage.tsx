@@ -7,8 +7,10 @@ import { listTaskInstances, markTaskInstanceDone } from '../api/taskInstances'
 import { listRepairLogs } from '../api/repairLogs'
 import { listPartReplacements } from '../api/partReplacements'
 import { getPublicConfig } from '../api/config'
+import { uploadPhoto } from '../api/photos'
 import { computeDisplayStatus } from '../lib/status'
 import { StatusBadge } from '../components/StatusBadge'
+import { CameraCapture } from '../components/CameraCapture'
 import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
 import type { PartReplacement, RepairLog, TaskInstance } from '../api/types'
@@ -33,6 +35,7 @@ export function MachineDetailPage() {
 
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [photos, setPhotos] = useState<Record<string, File | null>>({})
 
   const loading =
     machine.loading ||
@@ -63,7 +66,10 @@ export function MachineDetailPage() {
     setActionError(null)
     setMarkingId(taskInstanceId)
     try {
-      await markTaskInstanceDone(taskInstanceId, {})
+      const photo = photos[taskInstanceId]
+      const photoUrl = photo ? (await uploadPhoto(photo)).url : undefined
+      await markTaskInstanceDone(taskInstanceId, { photoUrl })
+      setPhotos((prev) => ({ ...prev, [taskInstanceId]: null }))
       await taskInstances.refetch()
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Could not mark task done')
@@ -113,16 +119,22 @@ export function MachineDetailPage() {
                       {taskType?.category} · Due {instance.dueDate}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={displayStatus} />
                     {canMarkDone && (
-                      <button
-                        onClick={() => handleMarkDone(instance.id)}
-                        disabled={markingId === instance.id}
-                        className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                      >
-                        {markingId === instance.id ? 'Saving…' : 'Mark done'}
-                      </button>
+                      <>
+                        <CameraCapture
+                          photo={photos[instance.id] ?? null}
+                          onPhotoChange={(file) => setPhotos((prev) => ({ ...prev, [instance.id]: file }))}
+                        />
+                        <button
+                          onClick={() => handleMarkDone(instance.id)}
+                          disabled={markingId === instance.id}
+                          className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                        >
+                          {markingId === instance.id ? 'Saving…' : 'Mark done'}
+                        </button>
+                      </>
                     )}
                   </div>
                 </li>
@@ -150,11 +162,20 @@ export function MachineDetailPage() {
                 className="rounded-md border border-slate-200 p-3"
               >
                 {entry.kind === 'task' && (
-                  <p className="text-sm text-slate-700">
-                    <span className="font-medium">Completed:</span>{' '}
-                    {taskTypeById.get(entry.instance.taskTypeId)?.description ?? 'Task'}{' '}
-                    <span className="text-slate-400">· {entry.instance.completedAt?.slice(0, 10)}</span>
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm text-slate-700">
+                      <span className="font-medium">Completed:</span>{' '}
+                      {taskTypeById.get(entry.instance.taskTypeId)?.description ?? 'Task'}{' '}
+                      <span className="text-slate-400">· {entry.instance.completedAt?.slice(0, 10)}</span>
+                    </p>
+                    {entry.instance.photoUrl && (
+                      <img
+                        src={entry.instance.photoUrl}
+                        alt="Proof of completion"
+                        className="h-8 w-8 rounded object-cover"
+                      />
+                    )}
+                  </div>
                 )}
                 {entry.kind === 'repair' && (
                   <p className="text-sm text-slate-700">

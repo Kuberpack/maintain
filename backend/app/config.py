@@ -21,6 +21,12 @@ class Settings(BaseSettings):
 
     local_timezone: str = "Asia/Kolkata"
 
+    # Local-disk storage for mark-done proof-of-completion photos. Real
+    # cloud storage is an open question (todo.md Phase 5); this is enough
+    # for the current single-server deployment model.
+    uploads_dir: str = "uploads"
+    max_upload_size_mb: int = 8
+
 
 @lru_cache
 def get_settings() -> Settings:

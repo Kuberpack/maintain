@@ -36,6 +36,9 @@ pnpm-debug.log*
 *.dump
 /backups/
 
+# Uploaded files (local-disk photo storage)
+/backend/uploads/
+
 # Editors / OS
 .vscode/
 .idea/

@@ -11,10 +11,14 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem('authToken')
+  // FormData bodies (photo upload) need the browser to set its own
+  // multipart Content-Type with boundary -- forcing application/json here
+  // would silently break the upload.
+  const isFormData = init?.body instanceof FormData
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },

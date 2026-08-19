@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_roles
@@ -23,7 +23,7 @@ _write_roles = require_roles(UserRole.supervisor)
 
 @router.get("", response_model=list[PartReplacementPublic])
 def list_part_replacements(
-    machine_id: uuid.UUID | None = None,
+    machine_id: uuid.UUID | None = Query(default=None, alias="machineId"),
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ) -> list[PartReplacement]:

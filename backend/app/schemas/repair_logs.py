@@ -1,22 +1,22 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+
+from app.schemas.base import CamelModel
 
 
-class RepairLogCreate(BaseModel):
+class RepairLogCreate(CamelModel):
     machine_id: uuid.UUID
     issue_description: str = Field(min_length=1)
     downtime_minutes: int | None = Field(default=None, ge=0)
 
 
-class RepairLogResolve(BaseModel):
+class RepairLogResolve(CamelModel):
     resolution_notes: str | None = None
 
 
-class RepairLogPublic(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class RepairLogPublic(CamelModel):
     id: uuid.UUID
     machine_id: uuid.UUID
     reported_at: datetime

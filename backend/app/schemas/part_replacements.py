@@ -1,25 +1,25 @@
 import uuid
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+
+from app.schemas.base import CamelModel
 
 
-class PartReplacementCreate(BaseModel):
+class PartReplacementCreate(CamelModel):
     machine_id: uuid.UUID
     part_name: str = Field(min_length=1, max_length=255)
     replaced_at: date
     notes: str | None = None
 
 
-class PartReplacementUpdate(BaseModel):
+class PartReplacementUpdate(CamelModel):
     part_name: str | None = Field(default=None, min_length=1, max_length=255)
     replaced_at: date | None = None
     notes: str | None = None
 
 
-class PartReplacementPublic(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class PartReplacementPublic(CamelModel):
     id: uuid.UUID
     machine_id: uuid.UUID
     part_name: str

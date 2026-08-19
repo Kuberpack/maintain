@@ -1,24 +1,24 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+
+from app.schemas.base import CamelModel
 
 
-class MachineCreate(BaseModel):
+class MachineCreate(CamelModel):
     name: str = Field(min_length=1, max_length=255)
     type: str = Field(min_length=1, max_length=100)
     location: str | None = Field(default=None, max_length=255)
 
 
-class MachineUpdate(BaseModel):
+class MachineUpdate(CamelModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     type: str | None = Field(default=None, min_length=1, max_length=100)
     location: str | None = None
 
 
-class MachinePublic(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class MachinePublic(CamelModel):
     id: uuid.UUID
     name: str
     type: str

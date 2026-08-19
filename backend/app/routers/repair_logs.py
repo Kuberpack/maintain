@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_roles
@@ -20,8 +20,8 @@ _resolve_roles = require_roles(UserRole.supervisor)
 
 @router.get("", response_model=list[RepairLogPublic])
 def list_repair_logs(
-    machine_id: uuid.UUID | None = None,
-    unresolved_only: bool = False,
+    machine_id: uuid.UUID | None = Query(default=None, alias="machineId"),
+    unresolved_only: bool = Query(default=False, alias="unresolvedOnly"),
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ) -> list[RepairLog]:

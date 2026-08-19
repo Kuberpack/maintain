@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_roles
@@ -26,7 +26,7 @@ _manage_roles = require_roles(UserRole.supervisor)
 
 @router.get("", response_model=list[TaskInstancePublic])
 def list_task_instances(
-    machine_id: uuid.UUID | None = None,
+    machine_id: uuid.UUID | None = Query(default=None, alias="machineId"),
     status: TaskStatus | None = None,
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),

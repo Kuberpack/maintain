@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_roles
@@ -17,7 +17,7 @@ _write_roles = require_roles(UserRole.supervisor)
 
 @router.get("", response_model=list[TaskTypePublic])
 def list_task_types(
-    machine_id: uuid.UUID | None = None,
+    machine_id: uuid.UUID | None = Query(default=None, alias="machineId"),
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ) -> list[TaskType]:
@@ -61,13 +61,13 @@ def update_task_type(
         db.rollback()
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "default_interval_days must be omitted for repair (event-driven, not scheduled)",
+            "defaultIntervalDays must be omitted for repair (event-driven, not scheduled)",
         )
     if task_type.category != TaskCategory.repair and task_type.default_interval_days is None:
         db.rollback()
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "default_interval_days is required for non-repair task types",
+            "defaultIntervalDays is required for non-repair task types",
         )
 
     db.commit()

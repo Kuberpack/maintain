@@ -1,12 +1,13 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
 from app.models import UserRole
+from app.schemas.base import CamelModel
 
 
-class UserCreate(BaseModel):
+class UserCreate(CamelModel):
     name: str = Field(min_length=1, max_length=255)
     role: UserRole
     email: str | None = None
@@ -34,7 +35,7 @@ class UserCreate(BaseModel):
         return self
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(CamelModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     role: UserRole | None = None
     email: str | None = None
@@ -46,9 +47,7 @@ class UserUpdate(BaseModel):
     # with the existing row (a PATCH may only touch one of role/pin/password).
 
 
-class UserPublic(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class UserPublic(CamelModel):
     id: uuid.UUID
     name: str
     role: UserRole

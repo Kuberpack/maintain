@@ -18,3 +18,24 @@ export function markTaskInstanceDone(
     body: JSON.stringify(payload),
   })
 }
+
+export function createTaskInstance(payload: {
+  taskTypeId: string
+  dueDate: string
+  notes?: string
+}): Promise<TaskInstance> {
+  return apiFetch<TaskInstance>('/task-instances', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function rescheduleTaskInstance(
+  id: string,
+  payload: { dueDate: string; notes?: string },
+): Promise<TaskInstance> {
+  return apiFetch<TaskInstance>(`/task-instances/${id}/reschedule`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}

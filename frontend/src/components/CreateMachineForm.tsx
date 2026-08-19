@@ -1,26 +1,24 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { createPartReplacement } from '../api/partReplacements'
+import { createMachine } from '../api/machines'
 import { ApiError } from '../api/client'
-import { todayLocalDate } from '../lib/date'
 
-interface LogPartReplacementFormProps {
-  machineId: string
-  onLogged: () => void
+interface CreateMachineFormProps {
+  onCreated: () => void
 }
 
-export function LogPartReplacementForm({ machineId, onLogged }: LogPartReplacementFormProps) {
+export function CreateMachineForm({ onCreated }: CreateMachineFormProps) {
   const [open, setOpen] = useState(false)
-  const [partName, setPartName] = useState('')
-  const [replacedAt, setReplacedAt] = useState(todayLocalDate())
-  const [notes, setNotes] = useState('')
+  const [name, setName] = useState('')
+  const [type, setType] = useState('')
+  const [location, setLocation] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function reset() {
-    setPartName('')
-    setReplacedAt(todayLocalDate())
-    setNotes('')
+    setName('')
+    setType('')
+    setLocation('')
     setError(null)
   }
 
@@ -29,17 +27,12 @@ export function LogPartReplacementForm({ machineId, onLogged }: LogPartReplaceme
     setError(null)
     setSubmitting(true)
     try {
-      await createPartReplacement({
-        machineId,
-        partName,
-        replacedAt,
-        notes: notes || undefined,
-      })
+      await createMachine({ name, type, location: location || undefined })
       reset()
       setOpen(false)
-      onLogged()
+      onCreated()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not log part replacement')
+      setError(err instanceof ApiError ? err.message : 'Could not create machine')
     } finally {
       setSubmitting(false)
     }
@@ -50,42 +43,45 @@ export function LogPartReplacementForm({ machineId, onLogged }: LogPartReplaceme
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        className="mb-4 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
       >
-        Log a part replacement
+        + Add machine
       </button>
     )
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-md border border-slate-200 p-3">
-      <p className="text-sm font-semibold text-slate-900">Log a part replacement</p>
+    <form onSubmit={handleSubmit} className="mb-4 flex flex-col gap-3 rounded-md border border-slate-200 bg-white p-3 sm:max-w-sm">
+      <p className="text-sm font-semibold text-slate-900">Add machine</p>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-slate-700">Part name</span>
+        <span className="font-medium text-slate-700">Name</span>
         <input
           type="text"
           required
-          value={partName}
-          onChange={(e) => setPartName(e.target.value)}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Corrugator 1"
           className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-slate-700">Replaced on</span>
+        <span className="font-medium text-slate-700">Type</span>
         <input
-          type="date"
+          type="text"
           required
-          value={replacedAt}
-          onChange={(e) => setReplacedAt(e.target.value)}
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          placeholder="e.g. corrugator, printer, laminator"
           className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-slate-700">Notes (optional)</span>
-        <textarea
-          rows={2}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+        <span className="font-medium text-slate-700">Location (optional)</span>
+        <input
+          type="text"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="e.g. Bay A"
           className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
         />
       </label>
@@ -96,7 +92,7 @@ export function LogPartReplacementForm({ machineId, onLogged }: LogPartReplaceme
           disabled={submitting}
           className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
         >
-          {submitting ? 'Logging…' : 'Log replacement'}
+          {submitting ? 'Adding…' : 'Add machine'}
         </button>
         <button
           type="button"

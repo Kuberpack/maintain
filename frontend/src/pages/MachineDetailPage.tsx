@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAsync } from '../lib/useAsync'
-import { getMachine } from '../api/machines'
+import { getMachine, deleteMachine } from '../api/machines'
 import { listTaskTypes } from '../api/taskTypes'
 import { listTaskInstances, markTaskInstanceDone } from '../api/taskInstances'
 import { listRepairLogs } from '../api/repairLogs'
@@ -13,6 +13,10 @@ import { StatusBadge } from '../components/StatusBadge'
 import { CameraCapture } from '../components/CameraCapture'
 import { ReportRepairForm } from '../components/ReportRepairForm'
 import { LogPartReplacementForm } from '../components/LogPartReplacementForm'
+import { EditMachineForm } from '../components/EditMachineForm'
+import { TaskTypesSection } from '../components/TaskTypesSection'
+import { RescheduleTaskInstanceForm } from '../components/RescheduleTaskInstanceForm'
+import { ResolveRepairLogForm } from '../components/ResolveRepairLogForm'
 import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
 import type { PartReplacement, RepairLog, TaskInstance } from '../api/types'
@@ -25,10 +29,14 @@ type TimelineEntry =
 export function MachineDetailPage() {
   const { id } = useParams<{ id: string }>()
   const machineId = id ?? ''
+  const navigate = useNavigate()
   const { user } = useAuth()
   // Same floor-level role gate as the mark-done action: operator + supervisor
   // can act, management is read-only.
   const canDoFloorWork = user?.role === 'operator' || user?.role === 'supervisor'
+  // Setup/admin actions (edit/delete machine, task types, reschedule, resolve
+  // repairs) are supervisor-only, per the existing permission model.
+  const isSupervisor = user?.role === 'supervisor'
 
   const machine = useAsync(() => getMachine(machineId), [machineId])
   const taskTypes = useAsync(() => listTaskTypes(machineId), [machineId])
@@ -40,6 +48,8 @@ export function MachineDetailPage() {
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [photos, setPhotos] = useState<Record<string, File | null>>({})
+  const [deletingMachine, setDeletingMachine] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const loading =
     machine.loading ||
@@ -65,6 +75,22 @@ export function MachineDetailPage() {
   const cfg = config.data
 
   const taskTypeById = new Map(taskTypeList.map((tt) => [tt.id, tt]))
+
+  async function handleDeleteMachine() {
+    const confirmed = window.confirm(
+      `Delete "${machineData.name}"? This permanently deletes its task types, task instances, repair logs, and part replacements. This cannot be undone.`,
+    )
+    if (!confirmed) return
+    setDeleteError(null)
+    setDeletingMachine(true)
+    try {
+      await deleteMachine(machineId)
+      navigate('/')
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : 'Could not delete machine')
+      setDeletingMachine(false)
+    }
+  }
 
   async function handleMarkDone(taskInstanceId: string) {
     setActionError(null)
@@ -96,11 +122,29 @@ export function MachineDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl p-4">
-      <h1 className="text-xl font-semibold text-slate-900">{machineData.name}</h1>
-      <p className="mb-6 text-sm text-slate-500">
-        {machineData.type}
-        {machineData.location ? ` · ${machineData.location}` : ''}
-      </p>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">{machineData.name}</h1>
+          <p className="text-sm text-slate-500">
+            {machineData.type}
+            {machineData.location ? ` · ${machineData.location}` : ''}
+          </p>
+        </div>
+        {isSupervisor && (
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <EditMachineForm machine={machineData} onSaved={() => void machine.refetch()} />
+            <button
+              type="button"
+              onClick={() => void handleDeleteMachine()}
+              disabled={deletingMachine}
+              className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              {deletingMachine ? 'Deleting…' : 'Delete machine'}
+            </button>
+            {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
+          </div>
+        )}
+      </div>
 
       {canDoFloorWork && (
         <section className="mb-8">
@@ -110,6 +154,15 @@ export function MachineDetailPage() {
             <LogPartReplacementForm machineId={machineId} onLogged={() => void partReplacements.refetch()} />
           </div>
         </section>
+      )}
+
+      {isSupervisor && (
+        <TaskTypesSection
+          machineId={machineId}
+          taskTypes={taskTypeList}
+          onTaskTypesChanged={() => void taskTypes.refetch()}
+          onTaskInstancesChanged={() => void taskInstances.refetch()}
+        />
       )}
 
       <section className="mb-8">
@@ -149,6 +202,13 @@ export function MachineDetailPage() {
                           {markingId === instance.id ? 'Saving…' : 'Mark done'}
                         </button>
                       </>
+                    )}
+                    {isSupervisor && (
+                      <RescheduleTaskInstanceForm
+                        taskInstanceId={instance.id}
+                        currentDueDate={instance.dueDate}
+                        onRescheduled={() => void taskInstances.refetch()}
+                      />
                     )}
                   </div>
                 </li>
@@ -192,12 +252,17 @@ export function MachineDetailPage() {
                   </div>
                 )}
                 {entry.kind === 'repair' && (
-                  <p className="text-sm text-slate-700">
-                    <span className="font-medium">Repair:</span> {entry.log.issueDescription}{' '}
-                    <span className="text-slate-400">
-                      · {entry.log.reportedAt.slice(0, 10)} · {entry.log.resolvedAt ? 'resolved' : 'open'}
-                    </span>
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm text-slate-700">
+                      <span className="font-medium">Repair:</span> {entry.log.issueDescription}{' '}
+                      <span className="text-slate-400">
+                        · {entry.log.reportedAt.slice(0, 10)} · {entry.log.resolvedAt ? 'resolved' : 'open'}
+                      </span>
+                    </p>
+                    {isSupervisor && !entry.log.resolvedAt && (
+                      <ResolveRepairLogForm repairLogId={entry.log.id} onResolved={() => void repairLogs.refetch()} />
+                    )}
+                  </div>
                 )}
                 {entry.kind === 'part' && (
                   <p className="text-sm text-slate-700">

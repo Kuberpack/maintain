@@ -19,3 +19,10 @@ export function createRepairLog(payload: {
     body: JSON.stringify(payload),
   })
 }
+
+export function resolveRepairLog(id: string, payload: { resolutionNotes?: string }): Promise<RepairLog> {
+  return apiFetch<RepairLog>(`/repair-logs/${id}/resolve`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}

@@ -6,6 +6,7 @@ from app.config import get_settings
 from app.database import engine
 from app.routers import (
     auth,
+    config,
     machines,
     part_replacements,
     repair_logs,
@@ -27,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(config.router)
 app.include_router(machines.router)
 app.include_router(task_types.router)
 app.include_router(users.router)

@@ -6,6 +6,7 @@ const LINKS = [
   { to: '/', label: 'Machines', end: true },
   { to: '/overdue', label: 'Overdue', end: false },
   { to: '/summary', label: 'Summary', end: false },
+  { to: '/users', label: 'Users', end: false, roles: ['supervisor', 'management'] as const },
 ]
 
 function linkClass({ isActive }: { isActive: boolean }): string {
@@ -20,13 +21,15 @@ export function NavBar() {
 
   if (!user) return null
 
+  const links = LINKS.filter((link) => !('roles' in link) || (link.roles as readonly string[]).includes(user.role))
+
   return (
     <nav className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-6">
           <span className="font-semibold text-slate-900">Kuberpack Maintenance</span>
           <div className="hidden gap-1 sm:flex">
-            {LINKS.map((link) => (
+            {links.map((link) => (
               <NavLink key={link.to} to={link.to} className={linkClass} end={link.end}>
                 {link.label}
               </NavLink>
@@ -58,7 +61,7 @@ export function NavBar() {
       {open && (
         <div className="border-t border-slate-200 px-4 py-3 sm:hidden">
           <div className="flex flex-col gap-1">
-            {LINKS.map((link) => (
+            {links.map((link) => (
               <NavLink key={link.to} to={link.to} className={linkClass} end={link.end} onClick={() => setOpen(false)}>
                 {link.label}
               </NavLink>

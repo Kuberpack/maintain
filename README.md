@@ -23,6 +23,15 @@ docker compose up --build
 - Frontend: http://localhost:5173
 - Postgres: localhost:5432
 
+`/health` passing doesn't mean the app works -- it's just a DB ping. Compose
+starts against an **empty database**; run migrations and seed it (once,
+after the containers are up) before anything else will work:
+
+```bash
+docker compose exec backend alembic upgrade head
+docker compose exec backend python -m app.seed
+```
+
 ## Running locally without Docker
 
 Backend:

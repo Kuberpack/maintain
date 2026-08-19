@@ -21,6 +21,9 @@ class Settings(BaseSettings):
 
     local_timezone: str = "Asia/Kolkata"
 
+    # Local hour (in local_timezone) the daily status-check/alert job runs.
+    daily_check_hour: int = 7
+
     # Local-disk storage for mark-done proof-of-completion photos. Real
     # cloud storage is an open question (todo.md Phase 5); this is enough
     # for the current single-server deployment model.

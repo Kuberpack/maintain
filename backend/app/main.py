@@ -1,4 +1,6 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,12 +20,21 @@ from app.routers import (
     task_types,
     users,
 )
+from app.scheduler import start_scheduler, stop_scheduler
 
 settings = get_settings()
 
 Path(settings.uploads_dir).mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Machine Maintenance & Cleaning Tracker API")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    start_scheduler()
+    yield
+    stop_scheduler()
+
+
+app = FastAPI(title="Machine Maintenance & Cleaning Tracker API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

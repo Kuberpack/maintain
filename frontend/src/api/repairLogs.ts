@@ -8,3 +8,21 @@ export function listRepairLogs(params?: { machineId?: string; unresolvedOnly?: b
   const qs = search.toString()
   return apiFetch<RepairLog[]>(`/repair-logs${qs ? `?${qs}` : ''}`)
 }
+
+export function createRepairLog(payload: {
+  machineId: string
+  issueDescription: string
+  downtimeMinutes?: number
+}): Promise<RepairLog> {
+  return apiFetch<RepairLog>('/repair-logs', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function resolveRepairLog(id: string, payload: { resolutionNotes?: string }): Promise<RepairLog> {
+  return apiFetch<RepairLog>(`/repair-logs/${id}/resolve`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}

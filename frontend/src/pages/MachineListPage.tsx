@@ -6,8 +6,11 @@ import { listTaskInstances } from '../api/taskInstances'
 import { getPublicConfig } from '../api/config'
 import { computeDisplayStatus, worstStatus } from '../lib/status'
 import { StatusBadge } from '../components/StatusBadge'
+import { CreateMachineForm } from '../components/CreateMachineForm'
+import { useAuth } from '../auth/useAuth'
 
 export function MachineListPage() {
+  const { user } = useAuth()
   const machines = useAsync(() => listMachines(), [])
   const taskTypes = useAsync(() => listTaskTypes(), [])
   const taskInstances = useAsync(() => listTaskInstances(), [])
@@ -30,6 +33,7 @@ export function MachineListPage() {
   return (
     <div className="mx-auto max-w-5xl p-4">
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Machines</h1>
+      {user?.role === 'supervisor' && <CreateMachineForm onCreated={() => void machines.refetch()} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {machineList.map((machine) => {
           const activeStatuses = taskInstanceList

@@ -495,6 +495,13 @@ Kuberpack staff. Same table is in `README.md`.
 
 ## 6. Frontend vs backend endpoint coverage — the complete gap list
 
+**⚠️ Superseded in part by §9 below.** This section describes the gap as it
+stood at the end of the original build session. Priority 1 of the
+frontend-coverage build-out (§9) has since closed two of these gaps
+(`repair_logs` create, `part_replacements` create). The table below is left
+as originally written for historical context; §9's table is the current
+one.
+
 The backend has **36 endpoints** across 9 routers. The frontend calls **12**
 of them. This is not an oversight to silently fix — it reflects that the
 explicit build order for the frontend (machine list, detail/timeline,
@@ -620,3 +627,269 @@ Stated plainly rather than glossed over:
 - **Local `main` branch staleness** in whatever sandbox produced this file —
   see §1. Not a real risk (origin/main has everything) but worth knowing so
   nobody panics if a stale local checkout looks wrong.
+
+---
+
+## 9. Frontend UI coverage build-out — Priority 1 (floor operations)
+
+A follow-up session (same day, branch `claude/kuberpack-maintenance-tracker-p5dqu5`)
+started closing the §6 gap, in the priority order the user specified: floor
+operations first, then supervisor setup/admin, then user management, with a
+check-in after each group. **This entry covers Priority 1 only** — the other
+two groups have not been started.
+
+### What was built
+
+Two new write actions on `MachineDetailPage`, next to the existing mark-done
+action, both gated by the same role check mark-done already used (renamed
+from `canMarkDone` to `canDoFloorWork` since it now gates three actions, not
+one — pure rename, no behavior change to the existing mark-done gate):
+
+- **Report a repair** — `frontend/src/components/ReportRepairForm.tsx`.
+  Collapsed to a single button by default; expands to a form (issue
+  description, required; downtime minutes, optional) on click. Submits via
+  a new `createRepairLog()` in `frontend/src/api/repairLogs.ts`, calling
+  the existing `POST /repair-logs` endpoint — no backend changes needed,
+  that endpoint already existed and already takes `reported_by` from the
+  JWT, not the request body.
+- **Log a part replacement** — `frontend/src/components/LogPartReplacementForm.tsx`.
+  Same collapse/expand pattern (part name required, replaced-on date
+  defaulting to today in local/browser time, notes optional). Submits via
+  a new `createPartReplacement()` in `frontend/src/api/partReplacements.ts`,
+  calling the existing `POST /part-replacements` endpoint.
+
+Both forms live in a new "Actions" section on the machine detail page,
+above "Pending tasks." On successful submit they call the existing
+`repairLogs.refetch()` / `partReplacements.refetch()` (the `useAsync` hooks
+already wired up on that page) so the new entry appears in the History
+timeline immediately, without a full page reload.
+
+**No backend changes were needed or made** — both endpoints, their
+permission gates, and their attribution-from-JWT behavior already existed
+and were exercised for the first time by real UI in this step.
+
+### Role visibility (per the existing, unchanged permission model)
+
+- **Report a repair**: operator + supervisor. Management sees neither the
+  "Actions" section nor its two buttons at all (not just disabled) —
+  verified in the browser, see below.
+- **Log a part replacement**: operator + supervisor. Same management
+  exclusion.
+
+This matches the backend's existing `_report_roles = require_roles(operator,
+supervisor)` on both `POST /repair-logs` and `POST /part-replacements` — the
+frontend gate mirrors, not redefines, the backend's rule.
+
+### Verified — real Postgres, real browser
+
+No Docker daemon in this sandbox (same limitation noted in §7/§8 for the
+original build) — verified via local Postgres 16 + `uvicorn` + Vite dev
+server directly, same approach the original session used successfully.
+
+- Fresh local Postgres 16 database, `alembic upgrade head`, then
+  `python -m app.seed` — clean migration and seed against a database this
+  session created itself, not a reused one.
+- **TypeScript strict mode**: `tsc -b` clean, zero errors.
+- **oxlint**: clean except the two pre-existing, already-documented
+  warnings in `useAsync.ts` (unrelated to this change).
+- **Playwright driving the real running dev server** (Chromium at
+  `/opt/pw-browsers/chromium-1194`, not a stub):
+  - Logged in as operator (Ramesh Kumar) → machine detail page → "Actions"
+    section with both buttons visible.
+  - Reported a repair (issue description + downtime minutes) → form
+    collapsed, entry appeared in History ("Repair: ... · open") without a
+    page reload.
+  - Logged a part replacement (part name + notes, default date) → same
+    collapse-and-appear-in-History behavior.
+  - **Confirmed directly in Postgres**, not just trusted the UI: both new
+    rows exist in `repair_logs`/`part_replacements` with `reported_by`/
+    `replaced_by` correctly set to Ramesh Kumar's actual user id (attribution
+    really does come from the JWT server-side, not the form).
+  - Logged out, logged in as management (Priya Kapoor) → navigated to the
+    **same** machine detail URL directly → confirmed zero count for the
+    "Actions" `<h2>`, the "Report a repair" button, the "Log a part
+    replacement" button, and "Mark done" — management is fully excluded,
+    not merely disabled.
+  - Logged in as supervisor (Anita Sharma) → confirmed the "Actions"
+    section is visible and a repair report submits successfully (operator
+    and supervisor share this permission, per the model).
+  - Submitted the part-replacement form with the required "part name" field
+    left empty → HTML5 `required` validation blocked the submit client-side
+    (form stayed open, no request sent), confirming the browser-level guard
+    works.
+  - **Follow-up, done directly against the API with `curl` (bypassing the
+    browser/HTML5 validation entirely)**, to close the gap noted above:
+    logged in via `POST /auth/login/pin`, then sent `POST /repair-logs`
+    with `issueDescription` as `""` and, separately, omitted entirely —
+    both `422`, `string_too_short` / `missing` respectively on the
+    `issueDescription` field. Same for `POST /part-replacements`: empty
+    `partName` → `422 string_too_short`; `partName` omitted → `422
+    missing`; `replacedAt` omitted → `422 missing`. A valid request
+    immediately after (real `issueDescription`, no other changes) returned
+    `201`, confirming the 422s were genuinely about the missing/empty
+    fields and not some unrelated breakage. Both endpoints' server-side
+    validation is now directly confirmed, not just inferred from the
+    original session's testing.
+
+### Not built / not touched in this step
+
+- Priority 2 (create/edit/delete machine & task_type, manual task_instance
+  creation, reschedule, resolve repair_log) — not started as of this entry;
+  see §10 below for its completion.
+- Priority 3 (user management UI) — not started.
+- **Undo/reopen a mark-done task instance**: confirmed still does not exist
+  anywhere on the backend (grepped the whole `backend/` tree for
+  reopen/undo/unmark — no matches; `task_instances.py` has only mark-done,
+  reschedule, and delete). Not built here per instruction — flagging again
+  so it doesn't get assumed to exist.
+
+---
+
+## 10. Frontend UI coverage build-out — Priority 2 (supervisor setup & admin)
+
+Same session, same branch. Closes the six remaining items from Priority 2:
+create/edit/delete machine, create/edit/delete task_type (enforcing the
+category/interval invariant), manual (ad-hoc) task_instance creation,
+reschedule a task_instance, and resolve a repair_log. All six are
+**supervisor-only**, per the existing permission model — no change to that
+model, only UI built for what the backend already enforces.
+
+### What was built
+
+- **Create machine** — `frontend/src/components/CreateMachineForm.tsx`.
+  Toggle button ("+ Add machine") above the machine grid on
+  `MachineListPage`, supervisor-only. On success, refetches the machine
+  list.
+- **Edit machine** — `frontend/src/components/EditMachineForm.tsx`. Toggle
+  button in the machine detail page header, pre-filled, supervisor-only.
+- **Delete machine** — plain button + `window.confirm` handled directly in
+  `MachineDetailPage.tsx` (not its own component — a single confirm+call+
+  redirect didn't earn a file). The confirm text spells out that this
+  cascades through task types, task instances, repair logs, and part
+  replacements, since `Machine`'s SQLAlchemy relationships are all
+  `cascade="all, delete-orphan"` with DB-level `ondelete="CASCADE"` — a
+  machine delete is a genuinely destructive, unrecoverable action, not a
+  soft delete. On success, navigates back to the machine list.
+- **Create/edit task_type** — `frontend/src/components/TaskTypeForm.tsx`, a
+  single component parameterized by an optional `taskType` prop (present =
+  edit, absent = create), since both share the same category/interval
+  logic and duplicating that felt like the wrong tradeoff. The interval
+  field is conditionally hidden and the category `repair` sends
+  `defaultIntervalDays` as `undefined` (create) or explicit `null` (edit,
+  so the PATCH actually clears a previously-set interval) — this mirrors
+  the backend's `category=repair-iff-null-interval` validator
+  (`TaskTypeCreate`'s `model_validator` / the router's re-check on update)
+  rather than reimplementing it; the backend is still the source of truth
+  and was independently re-verified via direct `curl` (see below).
+- **Delete task_type** — inline button + `window.confirm` inside the new
+  Task types list (see below), same cascade-warning reasoning as machine
+  delete (a task_type delete cascades to its task instances).
+- **Task types list/orchestration** —
+  `frontend/src/components/TaskTypesSection.tsx`. New "Task types" section
+  on the machine detail page, supervisor-only (task-type *reads* are open
+  to every role on the backend, but raw task-type management has no
+  reason to be visible to operator/management, so the whole section is
+  gated). Lists each task type with Create instance / Edit / Delete
+  inline, plus an "Add task type" toggle at the bottom.
+- **Create task_instance manually (ad-hoc)** —
+  `frontend/src/components/CreateTaskInstanceForm.tsx`. Small due-date +
+  optional-notes form, opened per-task-type from the "Create instance"
+  button in the Task types list (a manual instance is always *for* a
+  specific task type, so that's where it's anchored). Date input defaults
+  to today in local/browser time via the new shared
+  `frontend/src/lib/date.ts::todayLocalDate()` (extracted from
+  `LogPartReplacementForm`, which now imports it too, instead of keeping
+  two copies of the same function).
+- **Reschedule task_instance** —
+  `frontend/src/components/RescheduleTaskInstanceForm.tsx`. Toggle button
+  next to Mark done / Take photo in the Pending tasks list,
+  supervisor-only (operators can mark done but not reschedule, per the
+  existing model). Due date + optional reason, calls the existing
+  `PATCH /task-instances/{id}/reschedule`.
+- **Resolve repair_log** —
+  `frontend/src/components/ResolveRepairLogForm.tsx`. Small "Resolve"
+  button next to any repair entry in the History timeline that doesn't yet
+  have a `resolvedAt`, supervisor-only. Optional resolution notes, calls
+  the existing `PATCH /repair-logs/{id}/resolve`.
+
+**No backend changes were needed or made** — all six endpoints, their
+permission gates, validators, and cascade-delete behavior already existed.
+
+### Role visibility
+
+Every one of the six new actions above is **supervisor-only**: the
+"Actions" section (Priority 1) stays operator+supervisor as before, but
+everything from Priority 2 — Edit/Delete machine, the whole Task types
+section, Reschedule, Resolve — is gated on `user?.role === 'supervisor'`
+(a new `isSupervisor` boolean in `MachineDetailPage`, alongside the
+existing `canDoFloorWork`). Verified in the browser for both excluded
+roles, not just assumed from the gate existing in the code (see below).
+
+### Verified — real Postgres, real browser, plus direct API calls
+
+Same no-Docker-daemon setup as Priority 1 (local Postgres 16 +
+`uvicorn` + Vite dev server), fresh `alembic upgrade head` +
+`python -m app.seed` before testing, re-seeded again afterward to leave a
+clean baseline.
+
+- **TypeScript strict mode** (`tsc -b`) and **oxlint**: both clean, same
+  two pre-existing `useAsync.ts` warnings as before and nothing new.
+- **Playwright driving the real dev server**, as supervisor (Anita
+  Sharma) unless noted:
+  - Created a machine ("Laminator 2") from the list page → appeared in the
+    grid, opened its detail page.
+  - Created a `cleaning` task type with a 7-day interval, and a `repair`
+    task type — confirmed the interval input is hidden and replaced with
+    the "event-driven" explanatory text the instant `repair` is selected
+    in the category dropdown, before any submit.
+  - Edited the cleaning task type's description → updated in place.
+  - Created an ad-hoc task instance from that edited task type → appeared
+    in Pending tasks with the chosen due date.
+  - Rescheduled that pending instance to a new due date with a reason →
+    due date updated in place, still supervisor-only.
+  - Reported a repair on the new machine, then resolved it with notes →
+    History entry flipped from "open" to "resolved," Resolve button
+    disappeared (only unresolved repairs show it).
+  - Deleted the `repair`-category task type (zero instances) → gone from
+    the list.
+  - Deleted the whole machine → redirected to the machine list, confirmed
+    absent once the list actually finished loading (see the caveat
+    below), **and independently confirmed directly against Postgres**:
+    zero rows in `machines`, zero `task_types`/`repair_logs` referencing
+    the deleted machine's id, machine count back to the seeded baseline
+    of 5.
+  - Separately deleted a **seeded** task type that had two real task
+    instances under it ("Clean rollers and belts" on Corrugator 1, not
+    the zero-instance one above) — the more meaningful cascade case.
+    Confirmed via direct Postgres query, not just the UI, that both the
+    task type row and both task-instance rows are gone.
+  - Logged in as **management** and **operator** and, after properly
+    waiting for each page to finish loading (see caveat), confirmed zero
+    count for every one of: "+ Add machine", Edit machine, Delete
+    machine, the "Task types" section, Reschedule, Resolve. Operator
+    additionally confirmed to *still* see Report a repair (1) and Mark
+    done (2) — the Priority 1 gate is untouched by this change.
+  - **Direct API calls with `curl`**, bypassing the UI entirely: a
+    `cleaning` task type with no `defaultIntervalDays` → `422`; a `repair`
+    task type *with* `defaultIntervalDays` set → `422` — both confirm the
+    backend's own invariant, not just the frontend's conditional field.
+    An operator's token attempting `POST /machines` → `403`, confirming
+    the role gate is enforced server-side, not just hidden client-side.
+
+**Caveat worth stating plainly**: an early pass of this verification
+checked role-exclusion (`.count()` on buttons that shouldn't be visible)
+immediately after `waitForURL`, before the page's own data fetch had
+resolved — on a page that briefly shows "Loading…", a 0-count check at
+that moment is meaningless (everything reads as absent, correctly-gated
+or not). Caught this, redid every exclusion check gated behind a real
+load-completion signal instead (e.g. waiting for the "History" heading,
+which renders for every role once data has actually arrived), and the
+results above are from that corrected pass. Flagging this so the
+methodology is visible, not just the "PASS" outcome.
+
+### Not built / not touched in this step
+
+- Priority 3 (user management UI: list/create/edit/delete users) — not
+  started.
+- Undo/reopen a mark-done task instance — still confirmed absent from the
+  backend (see §9); unchanged this session.

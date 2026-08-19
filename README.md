@@ -79,3 +79,34 @@ Dummy login credentials (all `@kuberpack.com` / phone numbers are fake):
 | Anita Sharma | supervisor | 9812345004 | 4567 | | |
 | Rajesh Verma | supervisor | 9812345005 | 5678 | | |
 | Priya Kapoor | management | | | priya.kapoor@kuberpack.com | ChangeMe123! |
+
+## Backups
+
+`scripts/backup.sh` dumps the database (compressed) to `backups/` and prunes
+dumps older than `BACKUP_RETENTION_DAYS` (default 14). It reads
+`POSTGRES_USER`/`PASSWORD`/`DB` from the root `.env` -- the same variables
+docker-compose uses -- and connects over TCP to `localhost:5432`, so it
+works the same way whether Postgres is running via `docker compose up` (which
+publishes that port to the host) or as a bare-metal install. Needs the
+`postgresql-client` package on whatever machine runs it (for `pg_dump`).
+
+```bash
+./scripts/backup.sh
+```
+
+Schedule it with a host crontab entry (not a container -- this is meant to
+run on the actual shared PC/server, independent of the app containers'
+lifecycle):
+
+```bash
+crontab -e
+# daily at 2am:
+0 2 * * * cd /path/to/maintain && ./scripts/backup.sh >> backups/backup.log 2>&1
+```
+
+To restore a dump (into a database that already has the schema, or a fresh
+one you'll then run `alembic upgrade head` against):
+
+```bash
+gunzip -c backups/maintain_20260101_020000.sql.gz | psql -h localhost -U maintain -d maintain
+```

@@ -890,6 +890,177 @@ methodology is visible, not just the "PASS" outcome.
 ### Not built / not touched in this step
 
 - Priority 3 (user management UI: list/create/edit/delete users) — not
-  started.
+  started as of this entry; see §11 below for its completion.
 - Undo/reopen a mark-done task instance — still confirmed absent from the
   backend (see §9); unchanged this session.
+
+---
+
+## 11. Frontend UI coverage build-out — Priority 3 (user management)
+
+Same branch (`claude/kuberpack-maintenance-tracker-p5dqu5`). Before this
+step started, **PR #3** (containing Priority 1 + Priority 2, §9–§10) was
+merged into `main` — merge commit `40447b2`, via GitHub's merge-commit
+strategy, same as PR #1 and PR #2. The branch was then reset to a fresh
+`origin/main` (`git checkout -B <branch> origin/main` +
+`push --force-with-lease`) before this work began, per this repo's
+"a merged PR is finished, restart follow-up work from main" convention —
+so this section's commits sit directly on top of everything in §9–§10,
+not stacked on the old, now-merged branch history.
+
+This closes the last item from the original coverage gap (§6): **users**
+went from zero frontend usage to full CRUD, completing all three planned
+priorities.
+
+### What was built
+
+- **List/view users** — `frontend/src/pages/UsersPage.tsx`, new page at
+  `/users`. Visible to **supervisor + management** (matching
+  `GET /users`'s `_read_roles`), with a new "Users" nav link in
+  `NavBar.tsx` filtered to those two roles — operators never see the link,
+  and the page itself also checks the role and shows a plain message
+  instead of calling the API if reached directly (defensive; the backend
+  would 403 anyway, but this avoids firing a request that's guaranteed to
+  fail and avoids a confusing error state).
+- **Create user** — `frontend/src/components/CreateUserForm.tsx`,
+  supervisor-only. Role selection drives which fields show: `management`
+  → email + password (min. 8 chars); `operator`/`supervisor` → phone
+  number + PIN (4–6 digits, matching the backend's regex). WhatsApp number
+  is always optional, for alerts, independent of login credentials (per
+  the existing `phone_number` vs `whatsapp_number` separation documented
+  in §3).
+- **Edit user** — `frontend/src/components/EditUserForm.tsx`,
+  supervisor-only, including role changes. This is the one place real
+  logic lives on the frontend rather than just mirroring the backend: a
+  `credentialFamily(role)` helper (`'pin'` for operator/supervisor,
+  `'password'` for management) compares the user's *original* role
+  against the role being set. If they cross the pin/password boundary,
+  the new credential field is marked `required` in the UI, because the
+  backend's `update_user` (see §4 item 3 and §3) clears the now-irrelevant
+  hash the moment role changes and then 422s if the new one isn't present
+  — so leaving that field optional in the UI would just produce a
+  confusing validation error after submit instead of before. If role
+  *doesn't* cross that boundary, the credential field is optional
+  ("leave blank to keep current"). The backend remains the actual
+  authority; this is UI guidance built to match it, independently
+  re-verified below rather than assumed correct from reading the code.
+- **Delete user** — inline button + `window.confirm` in `UsersPage.tsx`
+  (not a separate component — same reasoning as the machine-delete button
+  in §10). On a `409` (user has task/repair/part history — the existing
+  `RESTRICT` + `passive_deletes` behavior from §2 step 4 / §4 item 2), the
+  backend's exact error message ("Cannot delete a user with existing
+  task/repair/part history") surfaces inline via the existing `ApiError`
+  handling — no special-case code needed, since that path already worked
+  correctly for every other resource's delete button.
+
+**No backend changes were needed or made** — `users.py`'s router, schemas,
+and validators (§2 step 4, credential-family logic from §4 item 3) already
+existed exactly as needed; this step only builds UI for them.
+
+**One thing intentionally *not* added**: there's no special "you can't
+delete yourself" guard. The backend has no such protection either (only
+the history-based `RESTRICT` applies), and building one wasn't asked for.
+A supervisor deleting their own account would immediately invalidate their
+own session (`get_current_user` 401s once the row is gone) — a real but
+self-inflicted risk, flagged here rather than silently guarded against or
+silently ignored.
+
+### Role visibility
+
+- **View the Users page**: supervisor + management (management read-only —
+  no "+ Add user", no Edit/Delete buttons render for them at all).
+- **Create/Edit/Delete a user**: supervisor only.
+- **Operators**: no nav link, no page access (would 403 if they reached
+  `/users` directly by URL; the page shows a plain message instead of
+  attempting the call).
+
+### Verified — real Postgres, real browser, plus direct API calls
+
+Same no-Docker-daemon setup as §9/§10 (local Postgres 16 + `uvicorn` + Vite
+dev server), fresh `alembic upgrade head` + `python -m app.seed` before
+testing, re-seeded again afterward.
+
+- **TypeScript strict mode** (`tsc -b`) and **oxlint**: both clean, same
+  two pre-existing `useAsync.ts` warnings, nothing new.
+- **Playwright driving the real dev server**:
+  - Operator: confirmed no "Users" nav link (checked after waiting for the
+    machine grid to actually render — the load-completion-signal lesson
+    from §10 applied from the start this time).
+  - Management: confirmed the "Users" nav link *is* present and the page
+    loads all 6 seeded users, but with zero "+ Add user"/Edit/Delete
+    controls. (One early check of the management nav-link visibility was
+    done right after `waitForURL`, before the page had settled, and
+    returned a false "0" — caught immediately, redone with a proper wait,
+    confirmed correctly present. Noting this the same way §10 did, rather
+    than only reporting the corrected number.)
+  - Supervisor: created an `operator` user (phone+PIN) and a `management`
+    user (email+password) — both appeared correctly in the list with the
+    right contact field shown per role.
+  - Renamed a user without changing role — confirmed the PIN field had no
+    `required` attribute (optional, as intended).
+  - Changed a user's role from `operator` to `management` — confirmed the
+    password field became `required` the instant the role dropdown
+    changed, filled it in, saved successfully.
+  - **Logged out and confirmed the credential swap actually took effect**:
+    the old PIN no longer logs that user in at all (error shown, stays on
+    `/login`), the new password does (redirected to `/summary` as
+    management). This is the same bug-fix behavior documented in §4 item
+    3, now re-exercised through the real UI instead of only a direct API
+    call.
+  - Attempted to delete a user with real history (Ramesh Kumar, who has a
+    completed task instance) — got the backend's `409` message inline,
+    confirmed the user is still in the list afterward.
+  - Deleted two users with zero history (both freshly created in this
+    test session) — both succeeded, confirmed gone from the list.
+  - **Direct API calls with `curl`**, bypassing the UI: an operator's
+    token against `GET /users` → `403` (operators aren't in
+    `_read_roles`); an operator's token against `POST /users` → `403`; a
+    `management`-role create with no `password` → `422`; an
+    `operator`-role create with no `phoneNumber` → `422`; an
+    `operator`-role create with a 3-digit PIN (violates the `\d{4,6}`
+    pattern) → `422`.
+  - **Confirmed directly in Postgres** after the whole test pass: exactly
+    6 users remain (back to the seeded baseline), the rename persisted,
+    both test-created users are gone — not just "the UI stopped showing
+    them."
+
+### Not built / not touched in this step
+
+- Nothing left from the three planned priorities — all of Priority 1, 2,
+  and 3 are now built and verified. See §12 below for the honest summary
+  of what that does and doesn't mean.
+- Undo/reopen a mark-done task instance — still confirmed absent from the
+  backend; still not built (never asked to be, per the original
+  instruction — flagging its absence was the ask, not building it).
+
+---
+
+## 12. Where the frontend coverage build-out stands now
+
+All three priorities from the original ask are done:
+
+- **Priority 1** (§9): report a repair, log a part replacement.
+- **Priority 2** (§10): create/edit/delete machine and task_type, manual
+  task_instance creation, reschedule, resolve repair_log.
+- **Priority 3** (§11): list/create/edit/delete users.
+
+Combined with what already existed before this work (mark-done, photo
+upload, the three read-heavy pages), the frontend now has UI for every one
+of the backend's 36 endpoints **except**: `GET` by-id on several resources
+(never needed — the list views and detail-page joins cover everything the
+UI actually displays) and the two-step "create machine → create task type"
+flow's `GET /task-types/{id}` (same reasoning, unused because the list
+endpoint plus client-side filtering already gets there). None of those are
+gaps in *capability* — every write action the backend supports now has a
+UI path to it.
+
+**Still explicitly open, not part of this build:**
+- Undo/reopen a mark-done task instance — confirmed absent from the
+  backend across all three priority groups' checks (§9, §11). Not built,
+  per instruction; would need a new backend endpoint first if wanted.
+- Everything already listed as outstanding in §7 (secrets rotation, real
+  WhatsApp/SMTP providers, camera-on-real-device testing, a full
+  `docker compose up` re-verification beyond the one check after step 1)
+  is untouched and still open — this build only ever touched the
+  frontend's coverage of existing backend endpoints, nothing in §7's
+  scope.

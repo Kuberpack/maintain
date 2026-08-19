@@ -86,7 +86,10 @@ export function UsersPage() {
             ) : (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-medium text-slate-900">{u.name}</p>
+                  <p className="font-medium text-slate-900">
+                    {u.name}
+                    {u.id === currentUser?.id ? <span className="font-normal text-slate-400"> (you)</span> : null}
+                  </p>
                   <p className="text-sm text-slate-500">
                     {u.role} · {u.role === 'management' ? (u.email ?? '—') : (u.phoneNumber ?? '—')}
                     {u.whatsappNumber ? ` · WA ${u.whatsappNumber}` : ''}
@@ -101,14 +104,16 @@ export function UsersPage() {
                     >
                       Edit
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(u)}
-                      disabled={deletingId === u.id}
-                      className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      {deletingId === u.id ? 'Deleting…' : 'Delete'}
-                    </button>
+                    {u.id !== currentUser?.id && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(u)}
+                        disabled={deletingId === u.id}
+                        className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {deletingId === u.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

@@ -91,8 +91,10 @@ def update_user(
 
 @router.delete("/{user_id}", status_code=204)
 def delete_user(
-    user_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(_write_roles)
+    user_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(_write_roles)
 ) -> None:
     user = get_or_404(db, User, user_id, "User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "You cannot delete your own account")
     db.delete(user)
     commit_or_409(db, "Cannot delete a user with existing task/repair/part history")

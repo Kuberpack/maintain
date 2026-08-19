@@ -957,13 +957,8 @@ priorities.
 and validators (§2 step 4, credential-family logic from §4 item 3) already
 existed exactly as needed; this step only builds UI for them.
 
-**One thing intentionally *not* added**: there's no special "you can't
-delete yourself" guard. The backend has no such protection either (only
-the history-based `RESTRICT` applies), and building one wasn't asked for.
-A supervisor deleting their own account would immediately invalidate their
-own session (`get_current_user` 401s once the row is gone) — a real but
-self-inflicted risk, flagged here rather than silently guarded against or
-silently ignored.
+**Update:** the self-delete gap flagged above was raised and fixed as a
+same-day follow-up — see the addendum at the end of §11 below.
 
 ### Role visibility
 
@@ -1032,6 +1027,38 @@ testing, re-seeded again afterward.
 - Undo/reopen a mark-done task instance — still confirmed absent from the
   backend; still not built (never asked to be, per the original
   instruction — flagging its absence was the ask, not building it).
+
+### Addendum — self-delete guard (same-day follow-up)
+
+The self-delete gap flagged above was raised as a follow-up request and
+closed the same day, on the same branch/PR (#4).
+
+- **Backend**: `backend/app/routers/users.py::delete_user` now takes
+  `current_user: User = Depends(_write_roles)` (previously discarded as
+  `_user`) and compares `user.id == current_user.id` before the delete,
+  raising `409` ("You cannot delete your own account") if they match —
+  checked *before* `db.delete`/`commit_or_409`, so it never touches the
+  row. Chose `409` over `403` for consistency with the sibling
+  history-based rejection already on this same endpoint (both are "delete
+  rejected because of what this row is/means," not an authorization
+  failure — the caller has the role to delete users in general).
+- **Frontend**: `UsersPage.tsx` hides the Delete button entirely (not
+  disabled — matches the existing "hidden, not just disabled" convention
+  used everywhere else for role-gated actions in this codebase) on the
+  row where `u.id === currentUser?.id`, and labels that row "(you)" for
+  clarity. Edit is still available on your own row — only delete is
+  blocked.
+- **Verified**: direct `curl` — a supervisor's own token against
+  `DELETE /users/{their-own-id}` → `409` with the exact message above,
+  confirmed via a follow-up `GET` that the account still exists
+  afterward; the same supervisor deleting a *different*, freshly-created
+  zero-history user → `204`, confirming the guard is scoped to self only
+  and didn't regress normal deletes. **Real browser**, supervisor logged
+  in as Anita Sharma: her own row shows "(you)" with only an Edit button
+  (zero Delete buttons found for that row), every other row still has
+  both Edit and Delete, and a freshly created throwaway user was deleted
+  successfully end-to-end through the UI to confirm the normal path still
+  works.
 
 ---
 

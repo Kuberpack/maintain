@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
+from app.core.time import today_local
 from app.models import TaskInstance, TaskStatus
 
 
@@ -40,7 +41,7 @@ def complete_task_instance(
 
     next_instance = TaskInstance(
         task_type_id=task_instance.task_type_id,
-        due_date=now.date() + timedelta(days=interval_days),
+        due_date=today_local() + timedelta(days=interval_days),
         status=TaskStatus.pending,
     )
     db.add(next_instance)

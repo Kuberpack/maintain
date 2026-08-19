@@ -45,7 +45,28 @@ npm run dev
 
 ## Seed data
 
-This project has no real machine/task/staff data yet. Everything is seeded with
-realistic dummy data (`backend/app/seed.py`, added in a later step) so the
-schema and flows can be tested end-to-end. Swapping in real data is meant to
-be a seed-script edit, not a rebuild.
+This project has no real machine/task/staff data yet. `backend/app/seed.py`
+wipes and reseeds the database with realistic dummy data -- 5 machines,
+16 task types across them with varied intervals, 6 users across all three
+roles, plus example task instances, repair logs, and part replacements --
+so the schema and flows can be tested end-to-end:
+
+```bash
+cd backend
+.venv/bin/python -m app.seed
+```
+
+The `MACHINES` / `USERS` / `TASK_TYPES` constants at the top of that file are
+placeholders. Swapping in real data later means editing those constants, not
+rewriting the seeding logic.
+
+Dummy login credentials (all `@kuberpack.com` / phone numbers are fake):
+
+| Name | Role | Phone | PIN | Email | Password |
+|---|---|---|---|---|---|
+| Ramesh Kumar | operator | 9812345001 | 1234 | | |
+| Suresh Yadav | operator | 9812345002 | 2345 | | |
+| Vikram Singh | operator | 9812345003 | 3456 | | |
+| Anita Sharma | supervisor | 9812345004 | 4567 | | |
+| Rajesh Verma | supervisor | 9812345005 | 5678 | | |
+| Priya Kapoor | management | | | priya.kapoor@kuberpack.com | ChangeMe123! |

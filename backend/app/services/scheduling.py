@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.time import today_local
@@ -46,3 +47,48 @@ def complete_task_instance(
     )
     db.add(next_instance)
     return next_instance
+
+
+def reopen_task_instance(db: Session, task_instance: TaskInstance) -> TaskInstance:
+    """Undo a mark-done -- the inverse of complete_task_instance() above.
+
+    The schema has no explicit link from a completed instance to the next
+    occurrence it may have spawned, so this infers it: any other instance of
+    the same task_type with a due_date that isn't provably earlier (i.e.
+    >=, not >: same-day completions can tie -- e.g. mark done, undo, mark
+    done again all in one day yields two occurrences due on the same date).
+    If every such instance is still untouched (pending, never completed or
+    rescheduled), it only exists because this completion spawned it, so
+    it's removed along with the undo. If any of them has been acted on,
+    undoing this completion would leave that downstream activity dangling
+    with no due-date ancestor, so the whole reopen is refused instead -- the
+    caller has to reopen (and thereby unwind) the later ones first.
+    """
+    if task_instance.status != TaskStatus.done:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Task instance is not marked done")
+
+    later_instances = (
+        db.query(TaskInstance)
+        .filter(
+            TaskInstance.task_type_id == task_instance.task_type_id,
+            TaskInstance.due_date >= task_instance.due_date,
+            TaskInstance.id != task_instance.id,
+        )
+        .all()
+    )
+    for later in later_instances:
+        if later.status != TaskStatus.pending or later.completed_at is not None or later.rescheduled_by is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Cannot reopen: a later occurrence of this task has already been completed or rescheduled",
+            )
+
+    for later in later_instances:
+        db.delete(later)
+
+    task_instance.status = TaskStatus.pending
+    task_instance.completed_at = None
+    task_instance.completed_by = None
+    task_instance.notes = None
+    task_instance.photo_url = None
+    return task_instance

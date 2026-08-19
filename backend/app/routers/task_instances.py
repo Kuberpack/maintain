@@ -15,6 +15,7 @@ from app.schemas.task_instances import (
     TaskInstanceReschedule,
 )
 from app.services.scheduling import complete_task_instance
+from app.services.scheduling import reopen_task_instance as reopen_task_instance_service
 
 router = APIRouter(prefix="/task-instances", tags=["task_instances"])
 
@@ -74,6 +75,19 @@ def mark_task_instance_done(
     if next_instance is not None:
         db.refresh(next_instance)
     return TaskInstanceMarkDoneResponse(completed=task_instance, next=next_instance)
+
+
+@router.patch("/{task_instance_id}/reopen", response_model=TaskInstancePublic)
+def reopen_task_instance(
+    task_instance_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _user: User = Depends(_do_work_roles),
+) -> TaskInstance:
+    task_instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    reopen_task_instance_service(db, task_instance)
+    db.commit()
+    db.refresh(task_instance)
+    return task_instance
 
 
 @router.patch("/{task_instance_id}/reschedule", response_model=TaskInstancePublic)

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAsync } from '../lib/useAsync'
 import { getMachine, deleteMachine } from '../api/machines'
 import { listTaskTypes } from '../api/taskTypes'
-import { listTaskInstances, markTaskInstanceDone } from '../api/taskInstances'
+import { listTaskInstances, markTaskInstanceDone, reopenTaskInstance } from '../api/taskInstances'
 import { listRepairLogs } from '../api/repairLogs'
 import { listPartReplacements } from '../api/partReplacements'
 import { getPublicConfig } from '../api/config'
@@ -47,6 +47,8 @@ export function MachineDetailPage() {
 
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [reopeningId, setReopeningId] = useState<string | null>(null)
+  const [reopenError, setReopenError] = useState<string | null>(null)
   const [photos, setPhotos] = useState<Record<string, File | null>>({})
   const [deletingMachine, setDeletingMachine] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -105,6 +107,23 @@ export function MachineDetailPage() {
       setActionError(err instanceof ApiError ? err.message : 'Could not mark task done')
     } finally {
       setMarkingId(null)
+    }
+  }
+
+  async function handleReopen(taskInstanceId: string) {
+    const confirmed = window.confirm(
+      'Reopen this task? It moves back to Pending, and its completion notes/photo are cleared. If marking it done created a next occurrence that nothing has touched yet, that occurrence is removed too.',
+    )
+    if (!confirmed) return
+    setReopenError(null)
+    setReopeningId(taskInstanceId)
+    try {
+      await reopenTaskInstance(taskInstanceId)
+      await taskInstances.refetch()
+    } catch (err) {
+      setReopenError(err instanceof ApiError ? err.message : 'Could not reopen task')
+    } finally {
+      setReopeningId(null)
     }
   }
 
@@ -220,6 +239,7 @@ export function MachineDetailPage() {
 
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">History</h2>
+        {reopenError && <p className="mb-2 text-sm text-red-600">{reopenError}</p>}
         {timeline.length === 0 ? (
           <p className="text-sm text-slate-500">No history yet.</p>
         ) : (
@@ -236,18 +256,30 @@ export function MachineDetailPage() {
                 className="rounded-md border border-slate-200 p-3"
               >
                 {entry.kind === 'task' && (
-                  <div className="flex items-center gap-3">
-                    <p className="text-sm text-slate-700">
-                      <span className="font-medium">Completed:</span>{' '}
-                      {taskTypeById.get(entry.instance.taskTypeId)?.description ?? 'Task'}{' '}
-                      <span className="text-slate-400">· {entry.instance.completedAt?.slice(0, 10)}</span>
-                    </p>
-                    {entry.instance.photoUrl && (
-                      <img
-                        src={entry.instance.photoUrl}
-                        alt="Proof of completion"
-                        className="h-8 w-8 rounded object-cover"
-                      />
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm text-slate-700">
+                        <span className="font-medium">Completed:</span>{' '}
+                        {taskTypeById.get(entry.instance.taskTypeId)?.description ?? 'Task'}{' '}
+                        <span className="text-slate-400">· {entry.instance.completedAt?.slice(0, 10)}</span>
+                      </p>
+                      {entry.instance.photoUrl && (
+                        <img
+                          src={entry.instance.photoUrl}
+                          alt="Proof of completion"
+                          className="h-8 w-8 rounded object-cover"
+                        />
+                      )}
+                    </div>
+                    {canDoFloorWork && (
+                      <button
+                        type="button"
+                        onClick={() => void handleReopen(entry.instance.id)}
+                        disabled={reopeningId === entry.instance.id}
+                        className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        {reopeningId === entry.instance.id ? 'Reopening…' : 'Reopen'}
+                      </button>
                     )}
                   </div>
                 )}

@@ -715,12 +715,21 @@ server directly, same approach the original session used successfully.
     and supervisor share this permission, per the model).
   - Submitted the part-replacement form with the required "part name" field
     left empty → HTML5 `required` validation blocked the submit client-side
-    (form stayed open, no request sent) — didn't get to explicitly verify
-    the *backend's* 422 on this specific field via direct API call, only
-    that the browser-level guard works. The backend's `Field(min_length=1)`
-    constraint on `part_name` was already covered by the original session's
-    permission-matrix testing (§2 step 4), so this is very likely fine, but
-    stating the gap plainly rather than implying full coverage.
+    (form stayed open, no request sent), confirming the browser-level guard
+    works.
+  - **Follow-up, done directly against the API with `curl` (bypassing the
+    browser/HTML5 validation entirely)**, to close the gap noted above:
+    logged in via `POST /auth/login/pin`, then sent `POST /repair-logs`
+    with `issueDescription` as `""` and, separately, omitted entirely —
+    both `422`, `string_too_short` / `missing` respectively on the
+    `issueDescription` field. Same for `POST /part-replacements`: empty
+    `partName` → `422 string_too_short`; `partName` omitted → `422
+    missing`; `replacedAt` omitted → `422 missing`. A valid request
+    immediately after (real `issueDescription`, no other changes) returned
+    `201`, confirming the 422s were genuinely about the missing/empty
+    fields and not some unrelated breakage. Both endpoints' server-side
+    validation is now directly confirmed, not just inferred from the
+    original session's testing.
 
 ### Not built / not touched in this step
 

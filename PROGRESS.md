@@ -1083,11 +1083,139 @@ UI path to it.
 
 **Still explicitly open, not part of this build:**
 - Undo/reopen a mark-done task instance — confirmed absent from the
-  backend across all three priority groups' checks (§9, §11). Not built,
-  per instruction; would need a new backend endpoint first if wanted.
+  backend across all three priority groups' checks (§9, §11) at the time
+  this section was written. **Built as a same-day follow-up — see §13.**
 - Everything already listed as outstanding in §7 (secrets rotation, real
   WhatsApp/SMTP providers, camera-on-real-device testing, a full
   `docker compose up` re-verification beyond the one check after step 1)
   is untouched and still open — this build only ever touched the
   frontend's coverage of existing backend endpoints, nothing in §7's
   scope.
+- **GitHub's default branch is still not `main`** — see §13's note; this
+  one genuinely could not be done with the tools available in this
+  session, not merely skipped.
+
+---
+
+## 13. Undo/reopen a mark-done task instance (built as a follow-up)
+
+Requested directly, on the same branch, after §12 was written. This is a
+**new backend endpoint** — the one place in this whole build where new
+backend logic was actually needed, not just new frontend UI over an
+existing one.
+
+### What was built
+
+- **`PATCH /task-instances/{id}/reopen`** —
+  `backend/app/routers/task_instances.py`, delegating to a new
+  `reopen_task_instance()` in `backend/app/services/scheduling.py`
+  (mirroring where `complete_task_instance()` already lives — "the single
+  place this logic lives," same reasoning as that function's own
+  docstring). **Role: operator + supervisor**, the same level as mark-done
+  itself — an inferred judgment call, not specified, on the reasoning that
+  reopening is the direct inverse of an action operators already do
+  (correcting your own mistake), unlike reschedule/resolve which are
+  supervisor-only overrides of someone else's work. Flagging this the same
+  way the original permission model was flagged as inferred (§3).
+- **The real design problem**: the schema has no column linking a
+  completed instance to the next occurrence `complete_task_instance()` may
+  have spawned for it. Reopening has to infer that relationship instead of
+  reading it, and get it right in three cases:
+  1. **No successor exists** (repair-category task types, or the instance
+     hasn't been re-completed since) — just reset the instance to
+     `pending` and clear `completedAt`/`completedBy`/`notes`/`photoUrl`.
+  2. **A successor exists and is still untouched** (pending, never
+     completed or rescheduled) — it only exists *because* this completion
+     spawned it, so it's deleted as part of the undo. This is the common
+     "I just made a mistake, undo it" case for a recurring task type.
+  3. **A successor exists and has itself been acted on** (completed or
+     rescheduled) — undoing the earlier completion would leave that
+     downstream activity dangling with nothing to hang off of, so the
+     whole reopen is refused with `409` instead. The caller has to reopen
+     the later one(s) first — which naturally forms a LIFO undo stack,
+     verified below.
+- **A real bug found and fixed during this step, before it ever shipped**:
+  the first implementation found "later" instances of the same task type
+  via `due_date > this.due_date` (strict). That's wrong whenever two
+  completions land on the same calendar day — e.g. mark done, undo,
+  mark done again, all within the same session — because
+  `complete_task_instance()` computes the next due date from
+  `today_local()`, so two same-day completions produce two instances with
+  the *same* due_date. A strict `>` comparison misses that tie entirely,
+  so reopening the earlier one would silently leave the tied successor
+  orphaned in the database with nothing pointing at it. Fixed by comparing
+  `>=` and explicitly excluding the instance's own id. **Caught by
+  deliberately reproducing the same-day chain in testing, not by code
+  review** — see the verification below for the exact repro.
+
+### Verified — real Postgres, real browser, plus direct API calls
+
+Same no-Docker-daemon setup as §9–§11.
+
+- **Backend import check**: `python -c "import app.main"` — clean, and
+  `alembic upgrade head` produced no new migration (this feature needed no
+  schema change, by design — see above).
+- **TypeScript strict mode** (`tsc -b`) and **oxlint**: both clean, same
+  two pre-existing `useAsync.ts` warnings, nothing new.
+- **Direct API calls with `curl`**, building and unwinding a real chain:
+  - Reopened the seed script's one pre-completed instance → `200`, its
+    auto-spawned successor confirmed deleted directly in Postgres.
+  - Marked it done again (instance A, spawns B), then marked B done too
+    (spawns C) — **reproduced the same-day due-date tie**: confirmed in
+    Postgres that B and C landed on the identical `due_date`.
+  - Attempted to reopen A while B was still `done` → `409` as expected.
+  - Reopened B (the one with the tied successor C) → `200`, **confirmed C
+    was actually deleted despite the tie** — this is the exact case the
+    bug fix above addresses; it was re-verified after the fix, not just
+    reasoned about.
+  - Reopened A → `200`, now that B was unwound — confirmed exactly one
+    instance remains for that task type, back to `pending`. Full LIFO
+    unwind (A → B → C → undo C's effect → undo B's effect → undo A's
+    effect) verified end to end.
+  - A repair-category (non-recurring) instance: marked done, reopened
+    cleanly with no chain to consider (`next: null` on mark-done, as
+    expected).
+  - Reopening an already-`pending` instance (never completed, or already
+    reopened) → `409` "Task instance is not marked done."
+  - A management token against `PATCH .../reopen` → `403`, confirming the
+    operator+supervisor role gate server-side.
+- **Real browser** (Playwright): as operator, opened a machine detail
+  page, confirmed a "Reopen" button on the seeded completed entry in
+  History, clicked it (through the real confirm-dialog warning about
+  notes/photo clearing and possible successor removal), confirmed the
+  entry disappeared from History and reappeared in Pending Tasks with a
+  live-computed "Overdue" badge (due date was in the past) — and confirmed
+  its previously-spawned successor (visible in Pending Tasks *before* the
+  reopen, at a later due date) was gone from Pending Tasks *after* —
+  the cascade cleanup working in the real UI, not just via direct API. As
+  management, confirmed zero "Reopen" buttons anywhere.
+
+### Frontend
+
+- `frontend/src/api/taskInstances.ts::reopenTaskInstance()` — calls the
+  new endpoint.
+- `frontend/src/pages/MachineDetailPage.tsx` — a small "Reopen" button on
+  each completed entry in the History timeline, gated by the existing
+  `canDoFloorWork` (operator + supervisor). A `window.confirm` spells out
+  the consequences (notes/photo cleared, a still-untouched successor gets
+  removed) before calling the API, matching this codebase's established
+  pattern for consequential actions (machine delete, task_type delete).
+  On success, refetches task instances, which moves the entry from
+  History to Pending Tasks automatically via the existing status-based
+  filtering — no new client-side state machine needed.
+
+### The GitHub default-branch request
+
+Also asked in the same message: set GitHub's default branch to `main`
+(flagged as still open since the very first build session, §1/§7). **This
+was not done** — not skipped, but genuinely not possible with the tools
+available in this session. Changing a repository's default branch is an
+admin-level repository-settings call (`PATCH /repos/{owner}/{repo}` with
+`default_branch` on GitHub's REST API), and no tool exposed by this
+session's GitHub MCP server performs it — everything available operates
+on PRs, branches-as-refs, files, issues, and reviews, not repository
+settings. Confirmed by searching the available tools for anything
+matching "default branch," "repository settings," or "administration"
+before concluding this rather than guessing. Someone with repo admin
+access needs to do this by hand: **Settings → General → Default branch**
+on the GitHub web UI.

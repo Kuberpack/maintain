@@ -19,6 +19,12 @@ export function markTaskInstanceDone(
   })
 }
 
+export function reopenTaskInstance(id: string): Promise<TaskInstance> {
+  return apiFetch<TaskInstance>(`/task-instances/${id}/reopen`, {
+    method: 'PATCH',
+  })
+}
+
 export function createTaskInstance(payload: {
   taskTypeId: string
   dueDate: string

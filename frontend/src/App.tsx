@@ -1,37 +1,51 @@
-import { useEffect, useState } from 'react'
-import { getHealth } from './lib/api'
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './auth/AuthProvider'
+import { useAuth } from './auth/useAuth'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { NavBar } from './components/NavBar'
+import { LoginPage } from './pages/LoginPage'
+import { MachineListPage } from './pages/MachineListPage'
+import { MachineDetailPage } from './pages/MachineDetailPage'
+import { OverduePage } from './pages/OverduePage'
+import { SummaryPage } from './pages/SummaryPage'
 
-type ConnectionState = 'checking' | 'connected' | 'error'
+function Layout() {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <NavBar />
+      <Outlet />
+    </div>
+  )
+}
 
-function App() {
-  const [connection, setConnection] = useState<ConnectionState>('checking')
+function AppRoutes() {
+  const { isLoading } = useAuth()
 
-  useEffect(() => {
-    getHealth()
-      .then(() => setConnection('connected'))
-      .catch(() => setConnection('error'))
-  }, [])
+  if (isLoading) {
+    return <div className="flex min-h-screen items-center justify-center text-slate-500">Loading…</div>
+  }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
-      <h1 className="text-2xl font-semibold text-slate-900">
-        Machine Maintenance &amp; Cleaning Tracker
-      </h1>
-      <p className="text-slate-600">Kuberpack — Sonipat plant</p>
-      <div
-        className="rounded-full px-4 py-1 text-sm font-medium"
-        data-state={connection}
-        style={{
-          backgroundColor:
-            connection === 'connected' ? '#dcfce7' : connection === 'error' ? '#fee2e2' : '#f1f5f9',
-          color: connection === 'connected' ? '#166534' : connection === 'error' ? '#991b1b' : '#475569',
-        }}
-      >
-        {connection === 'checking' && 'Checking backend connection…'}
-        {connection === 'connected' && 'Backend connected'}
-        {connection === 'error' && 'Backend unreachable'}
-      </div>
-    </div>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<Layout />}>
+          <Route path="/" element={<MachineListPage />} />
+          <Route path="/machines/:id" element={<MachineDetailPage />} />
+          <Route path="/overdue" element={<OverduePage />} />
+          <Route path="/summary" element={<SummaryPage />} />
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   )
 }
 

@@ -1,0 +1,78 @@
+export type UserRole = 'operator' | 'supervisor' | 'management'
+export type TaskCategory = 'cleaning' | 'oiling' | 'part_replacement' | 'repair'
+export type TaskStatus = 'pending' | 'done' | 'overdue'
+
+export interface User {
+  id: string
+  name: string
+  role: UserRole
+  email: string | null
+  phoneNumber: string | null
+  whatsappNumber: string | null
+  createdAt: string
+}
+
+export interface Machine {
+  id: string
+  name: string
+  type: string
+  location: string | null
+  createdAt: string
+}
+
+export interface TaskType {
+  id: string
+  machineId: string
+  category: TaskCategory
+  description: string
+  defaultIntervalDays: number | null
+}
+
+export interface TaskInstance {
+  id: string
+  taskTypeId: string
+  dueDate: string
+  status: TaskStatus
+  completedAt: string | null
+  completedBy: string | null
+  notes: string | null
+  rescheduledBy: string | null
+  photoUrl: string | null
+}
+
+export interface TaskInstanceMarkDoneResponse {
+  completed: TaskInstance
+  next: TaskInstance | null
+}
+
+export interface RepairLog {
+  id: string
+  machineId: string
+  reportedAt: string
+  reportedBy: string | null
+  issueDescription: string
+  downtimeMinutes: number | null
+  resolvedAt: string | null
+  resolvedBy: string | null
+  resolutionNotes: string | null
+}
+
+export interface PartReplacement {
+  id: string
+  machineId: string
+  partName: string
+  replacedAt: string
+  replacedBy: string | null
+  notes: string | null
+}
+
+export interface PublicConfig {
+  alertUpcomingDays: number
+  alertOverdueEscalateDays: number
+}
+
+export interface TokenResponse {
+  accessToken: string
+  tokenType: string
+  user: User
+}

@@ -21,17 +21,21 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   })
 
   if (!response.ok) {
-    throw new ApiError(`Request to ${path} failed`, response.status)
+    let detail = `Request to ${path} failed (${response.status})`
+    try {
+      const body: unknown = await response.json()
+      if (body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string') {
+        detail = body.detail
+      }
+    } catch {
+      // response body wasn't JSON -- keep the generic message
+    }
+    throw new ApiError(detail, response.status)
+  }
+
+  if (response.status === 204) {
+    return undefined as T
   }
 
   return (await response.json()) as T
-}
-
-export interface HealthResponse {
-  status: string
-  database: string
-}
-
-export function getHealth(): Promise<HealthResponse> {
-  return apiFetch<HealthResponse>('/health')
 }

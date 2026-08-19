@@ -495,6 +495,13 @@ Kuberpack staff. Same table is in `README.md`.
 
 ## 6. Frontend vs backend endpoint coverage — the complete gap list
 
+**⚠️ Superseded in part by §9 below.** This section describes the gap as it
+stood at the end of the original build session. Priority 1 of the
+frontend-coverage build-out (§9) has since closed two of these gaps
+(`repair_logs` create, `part_replacements` create). The table below is left
+as originally written for historical context; §9's table is the current
+one.
+
 The backend has **36 endpoints** across 9 routers. The frontend calls **12**
 of them. This is not an oversight to silently fix — it reflects that the
 explicit build order for the frontend (machine list, detail/timeline,
@@ -620,3 +627,108 @@ Stated plainly rather than glossed over:
 - **Local `main` branch staleness** in whatever sandbox produced this file —
   see §1. Not a real risk (origin/main has everything) but worth knowing so
   nobody panics if a stale local checkout looks wrong.
+
+---
+
+## 9. Frontend UI coverage build-out — Priority 1 (floor operations)
+
+A follow-up session (same day, branch `claude/kuberpack-maintenance-tracker-p5dqu5`)
+started closing the §6 gap, in the priority order the user specified: floor
+operations first, then supervisor setup/admin, then user management, with a
+check-in after each group. **This entry covers Priority 1 only** — the other
+two groups have not been started.
+
+### What was built
+
+Two new write actions on `MachineDetailPage`, next to the existing mark-done
+action, both gated by the same role check mark-done already used (renamed
+from `canMarkDone` to `canDoFloorWork` since it now gates three actions, not
+one — pure rename, no behavior change to the existing mark-done gate):
+
+- **Report a repair** — `frontend/src/components/ReportRepairForm.tsx`.
+  Collapsed to a single button by default; expands to a form (issue
+  description, required; downtime minutes, optional) on click. Submits via
+  a new `createRepairLog()` in `frontend/src/api/repairLogs.ts`, calling
+  the existing `POST /repair-logs` endpoint — no backend changes needed,
+  that endpoint already existed and already takes `reported_by` from the
+  JWT, not the request body.
+- **Log a part replacement** — `frontend/src/components/LogPartReplacementForm.tsx`.
+  Same collapse/expand pattern (part name required, replaced-on date
+  defaulting to today in local/browser time, notes optional). Submits via
+  a new `createPartReplacement()` in `frontend/src/api/partReplacements.ts`,
+  calling the existing `POST /part-replacements` endpoint.
+
+Both forms live in a new "Actions" section on the machine detail page,
+above "Pending tasks." On successful submit they call the existing
+`repairLogs.refetch()` / `partReplacements.refetch()` (the `useAsync` hooks
+already wired up on that page) so the new entry appears in the History
+timeline immediately, without a full page reload.
+
+**No backend changes were needed or made** — both endpoints, their
+permission gates, and their attribution-from-JWT behavior already existed
+and were exercised for the first time by real UI in this step.
+
+### Role visibility (per the existing, unchanged permission model)
+
+- **Report a repair**: operator + supervisor. Management sees neither the
+  "Actions" section nor its two buttons at all (not just disabled) —
+  verified in the browser, see below.
+- **Log a part replacement**: operator + supervisor. Same management
+  exclusion.
+
+This matches the backend's existing `_report_roles = require_roles(operator,
+supervisor)` on both `POST /repair-logs` and `POST /part-replacements` — the
+frontend gate mirrors, not redefines, the backend's rule.
+
+### Verified — real Postgres, real browser
+
+No Docker daemon in this sandbox (same limitation noted in §7/§8 for the
+original build) — verified via local Postgres 16 + `uvicorn` + Vite dev
+server directly, same approach the original session used successfully.
+
+- Fresh local Postgres 16 database, `alembic upgrade head`, then
+  `python -m app.seed` — clean migration and seed against a database this
+  session created itself, not a reused one.
+- **TypeScript strict mode**: `tsc -b` clean, zero errors.
+- **oxlint**: clean except the two pre-existing, already-documented
+  warnings in `useAsync.ts` (unrelated to this change).
+- **Playwright driving the real running dev server** (Chromium at
+  `/opt/pw-browsers/chromium-1194`, not a stub):
+  - Logged in as operator (Ramesh Kumar) → machine detail page → "Actions"
+    section with both buttons visible.
+  - Reported a repair (issue description + downtime minutes) → form
+    collapsed, entry appeared in History ("Repair: ... · open") without a
+    page reload.
+  - Logged a part replacement (part name + notes, default date) → same
+    collapse-and-appear-in-History behavior.
+  - **Confirmed directly in Postgres**, not just trusted the UI: both new
+    rows exist in `repair_logs`/`part_replacements` with `reported_by`/
+    `replaced_by` correctly set to Ramesh Kumar's actual user id (attribution
+    really does come from the JWT server-side, not the form).
+  - Logged out, logged in as management (Priya Kapoor) → navigated to the
+    **same** machine detail URL directly → confirmed zero count for the
+    "Actions" `<h2>`, the "Report a repair" button, the "Log a part
+    replacement" button, and "Mark done" — management is fully excluded,
+    not merely disabled.
+  - Logged in as supervisor (Anita Sharma) → confirmed the "Actions"
+    section is visible and a repair report submits successfully (operator
+    and supervisor share this permission, per the model).
+  - Submitted the part-replacement form with the required "part name" field
+    left empty → HTML5 `required` validation blocked the submit client-side
+    (form stayed open, no request sent) — didn't get to explicitly verify
+    the *backend's* 422 on this specific field via direct API call, only
+    that the browser-level guard works. The backend's `Field(min_length=1)`
+    constraint on `part_name` was already covered by the original session's
+    permission-matrix testing (§2 step 4), so this is very likely fine, but
+    stating the gap plainly rather than implying full coverage.
+
+### Not built / not touched in this step
+
+- Priority 2 (create/edit/delete machine & task_type, manual task_instance
+  creation, reschedule, resolve repair_log) — not started.
+- Priority 3 (user management UI) — not started.
+- **Undo/reopen a mark-done task instance**: confirmed still does not exist
+  anywhere on the backend (grepped the whole `backend/` tree for
+  reopen/undo/unmark — no matches; `task_instances.py` has only mark-done,
+  reschedule, and delete). Not built here per instruction — flagging again
+  so it doesn't get assumed to exist.

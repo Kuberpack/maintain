@@ -5,3 +5,15 @@ export function listPartReplacements(machineId?: string): Promise<PartReplacemen
   const qs = machineId ? `?machineId=${machineId}` : ''
   return apiFetch<PartReplacement[]>(`/part-replacements${qs}`)
 }
+
+export function createPartReplacement(payload: {
+  machineId: string
+  partName: string
+  replacedAt: string
+  notes?: string
+}): Promise<PartReplacement> {
+  return apiFetch<PartReplacement>('/part-replacements', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}

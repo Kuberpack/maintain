@@ -11,6 +11,8 @@ import { uploadPhoto } from '../api/photos'
 import { computeDisplayStatus } from '../lib/status'
 import { StatusBadge } from '../components/StatusBadge'
 import { CameraCapture } from '../components/CameraCapture'
+import { ReportRepairForm } from '../components/ReportRepairForm'
+import { LogPartReplacementForm } from '../components/LogPartReplacementForm'
 import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
 import type { PartReplacement, RepairLog, TaskInstance } from '../api/types'
@@ -24,7 +26,9 @@ export function MachineDetailPage() {
   const { id } = useParams<{ id: string }>()
   const machineId = id ?? ''
   const { user } = useAuth()
-  const canMarkDone = user?.role === 'operator' || user?.role === 'supervisor'
+  // Same floor-level role gate as the mark-done action: operator + supervisor
+  // can act, management is read-only.
+  const canDoFloorWork = user?.role === 'operator' || user?.role === 'supervisor'
 
   const machine = useAsync(() => getMachine(machineId), [machineId])
   const taskTypes = useAsync(() => listTaskTypes(machineId), [machineId])
@@ -98,6 +102,16 @@ export function MachineDetailPage() {
         {machineData.location ? ` · ${machineData.location}` : ''}
       </p>
 
+      {canDoFloorWork && (
+        <section className="mb-8">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Actions</h2>
+          <div className="flex flex-wrap items-start gap-2">
+            <ReportRepairForm machineId={machineId} onReported={() => void repairLogs.refetch()} />
+            <LogPartReplacementForm machineId={machineId} onLogged={() => void partReplacements.refetch()} />
+          </div>
+        </section>
+      )}
+
       <section className="mb-8">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Pending tasks</h2>
         {actionError && <p className="mb-2 text-sm text-red-600">{actionError}</p>}
@@ -121,7 +135,7 @@ export function MachineDetailPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={displayStatus} />
-                    {canMarkDone && (
+                    {canDoFloorWork && (
                       <>
                         <CameraCapture
                           photo={photos[instance.id] ?? null}

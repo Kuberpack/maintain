@@ -6,7 +6,8 @@ const LINKS = [
   { to: '/', label: 'Machines', end: true },
   { to: '/overdue', label: 'Overdue', end: false },
   { to: '/summary', label: 'Summary', end: false },
-  { to: '/users', label: 'Users', end: false, roles: ['supervisor', 'management'] as const },
+  { to: '/users', label: 'Users', end: false, roles: ['admin', 'supervisor', 'management'] as const },
+  { to: '/profile', label: 'My Profile', end: false },
 ]
 
 function linkClass({ isActive }: { isActive: boolean }): string {

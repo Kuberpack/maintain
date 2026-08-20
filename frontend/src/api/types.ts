@@ -1,4 +1,4 @@
-export type UserRole = 'operator' | 'supervisor' | 'management'
+export type UserRole = 'operator' | 'supervisor' | 'management' | 'admin'
 export type TaskCategory = 'cleaning' | 'oiling' | 'part_replacement' | 'repair'
 export type TaskStatus = 'pending' | 'done' | 'overdue'
 

@@ -6,25 +6,33 @@ import type { User, UserRole } from '../api/types'
 
 interface EditUserFormProps {
   user: User
+  // Editing your own account: the role field is never shown (self
+  // role-changes are always rejected server-side too), and email/phone
+  // become self-service fields rather than an admin/supervisor action.
+  isSelf: boolean
+  // Roles selectable when editing *someone else* -- admin gets all four,
+  // a supervisor only ever gets ['operator'] (ignored when isSelf).
+  allowedRoles: UserRole[]
   onSaved: () => void
   onCancel: () => void
 }
 
-const ROLES: { value: UserRole; label: string }[] = [
-  { value: 'operator', label: 'Operator' },
-  { value: 'supervisor', label: 'Supervisor' },
-  { value: 'management', label: 'Management' },
-]
+const ROLE_LABELS: Record<UserRole, string> = {
+  operator: 'Operator',
+  supervisor: 'Supervisor',
+  management: 'Management',
+  admin: 'Admin',
+}
 
-// operator/supervisor log in with a PIN, management with a password -- matches
-// backend/app/routers/users.py::update_user, which clears whichever hash no
-// longer applies the moment role crosses this boundary and then requires the
-// other one to be present.
+// operator/supervisor/admin log in with a PIN, management with a password --
+// matches backend/app/routers/users.py::update_user, which clears whichever
+// hash no longer applies the moment role crosses this boundary and then
+// requires the other one to be present.
 function credentialFamily(role: UserRole): 'pin' | 'password' {
   return role === 'management' ? 'password' : 'pin'
 }
 
-export function EditUserForm({ user, onSaved, onCancel }: EditUserFormProps) {
+export function EditUserForm({ user, isSelf, allowedRoles, onSaved, onCancel }: EditUserFormProps) {
   const [name, setName] = useState(user.name)
   const [role, setRole] = useState<UserRole>(user.role)
   const [phoneNumber, setPhoneNumber] = useState(user.phoneNumber ?? '')
@@ -37,8 +45,12 @@ export function EditUserForm({ user, onSaved, onCancel }: EditUserFormProps) {
 
   const isManagement = role === 'management'
   // Crossing the pin/password boundary clears the old credential server-side,
-  // so the new one becomes mandatory here, not just optional.
+  // so the new one becomes mandatory here, not just optional. Never happens
+  // for a self-edit, since the role field isn't editable there at all.
   const credentialRequired = credentialFamily(user.role) !== credentialFamily(role)
+  const canPickRole = !isSelf && allowedRoles.length > 1
+  const phoneChanged = !isManagement && phoneNumber !== (user.phoneNumber ?? '')
+  const emailChanged = isManagement && email !== (user.email ?? '')
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -47,7 +59,7 @@ export function EditUserForm({ user, onSaved, onCancel }: EditUserFormProps) {
     try {
       await updateUser(user.id, {
         name,
-        role,
+        role: isSelf ? undefined : role,
         email: isManagement ? email : undefined,
         phoneNumber: isManagement ? undefined : phoneNumber,
         whatsappNumber: whatsappNumber || undefined,
@@ -75,20 +87,26 @@ export function EditUserForm({ user, onSaved, onCancel }: EditUserFormProps) {
           className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
         />
       </label>
-      <label className="flex flex-col gap-1 text-sm">
+      <div className="flex flex-col gap-1 text-sm">
         <span className="font-medium text-slate-700">Role</span>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as UserRole)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
-        >
-          {ROLES.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
-          ))}
-        </select>
-      </label>
+        {isSelf ? (
+          <p className="text-slate-500">{ROLE_LABELS[role]} (you can't change your own role)</p>
+        ) : canPickRole ? (
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as UserRole)}
+            className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
+          >
+            {allowedRoles.map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r]}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <p className="text-slate-500">{ROLE_LABELS[role]}</p>
+        )}
+      </div>
       {isManagement ? (
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-slate-700">Email</span>
@@ -99,6 +117,12 @@ export function EditUserForm({ user, onSaved, onCancel }: EditUserFormProps) {
             onChange={(e) => setEmail(e.target.value)}
             className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
           />
+          {emailChanged && (
+            <span className="text-amber-700">
+              ⚠️ Changing this changes the login email — the password stays the same, but you'll need to sign in
+              with the new email next time.
+            </span>
+          )}
         </label>
       ) : (
         <label className="flex flex-col gap-1 text-sm">
@@ -111,6 +135,12 @@ export function EditUserForm({ user, onSaved, onCancel }: EditUserFormProps) {
             onChange={(e) => setPhoneNumber(e.target.value)}
             className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
           />
+          {phoneChanged && (
+            <span className="text-amber-700">
+              ⚠️ Changing this changes the login phone number — the PIN stays the same, but you'll need to sign in
+              with the new number next time.
+            </span>
+          )}
         </label>
       )}
       <label className="flex flex-col gap-1 text-sm">

@@ -31,12 +31,12 @@ export function MachineDetailPage() {
   const machineId = id ?? ''
   const navigate = useNavigate()
   const { user } = useAuth()
-  // Same floor-level role gate as the mark-done action: operator + supervisor
-  // can act, management is read-only.
-  const canDoFloorWork = user?.role === 'operator' || user?.role === 'supervisor'
+  // Same floor-level role gate as the mark-done action: operator +
+  // supervisor + admin can act, management is read-only.
+  const canDoFloorWork = user?.role === 'operator' || user?.role === 'supervisor' || user?.role === 'admin'
   // Setup/admin actions (edit/delete machine, task types, reschedule, resolve
-  // repairs) are supervisor-only, per the existing permission model.
-  const isSupervisor = user?.role === 'supervisor'
+  // repairs) are supervisor+admin, per the existing permission model.
+  const canManageSetup = user?.role === 'supervisor' || user?.role === 'admin'
 
   const machine = useAsync(() => getMachine(machineId), [machineId])
   const taskTypes = useAsync(() => listTaskTypes(machineId), [machineId])
@@ -149,7 +149,7 @@ export function MachineDetailPage() {
             {machineData.location ? ` · ${machineData.location}` : ''}
           </p>
         </div>
-        {isSupervisor && (
+        {canManageSetup && (
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <EditMachineForm machine={machineData} onSaved={() => void machine.refetch()} />
             <button
@@ -175,7 +175,7 @@ export function MachineDetailPage() {
         </section>
       )}
 
-      {isSupervisor && (
+      {canManageSetup && (
         <TaskTypesSection
           machineId={machineId}
           taskTypes={taskTypeList}
@@ -222,7 +222,7 @@ export function MachineDetailPage() {
                         </button>
                       </>
                     )}
-                    {isSupervisor && (
+                    {canManageSetup && (
                       <RescheduleTaskInstanceForm
                         taskInstanceId={instance.id}
                         currentDueDate={instance.dueDate}
@@ -291,7 +291,7 @@ export function MachineDetailPage() {
                         · {entry.log.reportedAt.slice(0, 10)} · {entry.log.resolvedAt ? 'resolved' : 'open'}
                       </span>
                     </p>
-                    {isSupervisor && !entry.log.resolvedAt && (
+                    {canManageSetup && !entry.log.resolvedAt && (
                       <ResolveRepairLogForm repairLogId={entry.log.id} onResolved={() => void repairLogs.refetch()} />
                     )}
                   </div>

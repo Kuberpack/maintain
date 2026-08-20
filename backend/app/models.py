@@ -15,6 +15,7 @@ class UserRole(str, enum.Enum):
     operator = "operator"
     supervisor = "supervisor"
     management = "management"
+    admin = "admin"
 
 
 class TaskCategory(str, enum.Enum):

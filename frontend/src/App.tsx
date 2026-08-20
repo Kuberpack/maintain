@@ -9,6 +9,7 @@ import { MachineDetailPage } from './pages/MachineDetailPage'
 import { OverduePage } from './pages/OverduePage'
 import { SummaryPage } from './pages/SummaryPage'
 import { UsersPage } from './pages/UsersPage'
+import { MyProfilePage } from './pages/MyProfilePage'
 
 function Layout() {
   return (
@@ -36,6 +37,7 @@ function AppRoutes() {
           <Route path="/overdue" element={<OverduePage />} />
           <Route path="/summary" element={<SummaryPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/profile" element={<MyProfilePage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

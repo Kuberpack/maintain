@@ -81,9 +81,10 @@ to `frontend/` — rather than the repo root.
    railway run alembic upgrade head
    ```
 5. **Bootstrap the first real account** the same way, using the script
-   added earlier in this project:
+   added earlier in this project (prompts for role -- `admin` or
+   `supervisor`):
    ```bash
-   railway run python -m app.create_supervisor
+   railway run python -m app.bootstrap_account
    ```
 6. **Health check**: `GET /health` does a real DB round-trip (`SELECT 1`),
    not just a liveness ping — point Railway's health check at this path if
@@ -125,7 +126,7 @@ to `frontend/` — rather than the repo root.
 - Set `CORS_ORIGINS` on Railway to the real Vercel URL (step 3 above) —
   until that's done, the frontend's requests will be blocked by CORS.
 - Log in through the deployed frontend with the account created via
-  `create_supervisor`, confirm a machine/task type can be created, and
+  `bootstrap_account`, confirm a machine/task type can be created, and
   confirm a mark-done photo upload actually displays afterward (this
   exercises the `VITE_API_BASE_URL`-driven asset resolution described
   above — this is the one part of this change I could not verify against

@@ -1,7 +1,8 @@
 # Machine Maintenance & Cleaning Tracker
 
 Internal tool for Kuberpack's Sonipat plant. See `CLAUDE.md`, `architecture.md`,
-`schema.md`, `todo.md` for context, design, and data model.
+`schema.md`, `todo.md` for context, design, and data model. For the real
+online deployment (Vercel + Railway) rather than local dev, see `DEPLOYMENT.md`.
 
 ## Stack
 

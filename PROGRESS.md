@@ -1219,3 +1219,150 @@ matching "default branch," "repository settings," or "administration"
 before concluding this rather than guessing. Someone with repo admin
 access needs to do this by hand: **Settings → General → Default branch**
 on the GitHub web UI.
+
+---
+
+## 14. Deployment config for the real online deployment (Vercel + Railway)
+
+Requested directly: moving from LAN-only (`architecture.md`'s original
+assumption) to a real public deployment — frontend on Vercel, backend +
+Postgres on Railway, over HTTPS. This section is deployment config only;
+no application logic changed, and the local `docker-compose` setup was
+kept fully working, not replaced.
+
+### What was built
+
+- **`architecture.md`** — only the Deployment Strategy section rewritten
+  (as asked), everything else left intact. Now describes Vercel +
+  Railway + HTTPS instead of "single internal deployment, no public
+  exposure," and explicitly keeps local `docker-compose up` as still
+  supported for dev/testing alongside it.
+- **`backend/app/config.py`** — `Settings.database_url` gained a
+  `field_validator` that normalizes both the old Heroku-style
+  `postgres://` scheme and a driver-less `postgresql://` (either of which
+  Railway might hand out) to the explicit `postgresql+psycopg2://` this
+  app actually needs — leaving host/port/db-name/query-string (e.g. a
+  `?sslmode=...` param, if Railway's URL includes one) completely
+  untouched. This is the single source of truth for `database_url`
+  (`alembic/env.py` already reads it via the same `get_settings()`, per
+  the existing "one source of truth" comment in `alembic.ini`), so this
+  one change covers both the running app and migrations.
+- **`backend/Dockerfile`** — two changes, both pure deployment config:
+  - Dropped `--reload` from the image's own `CMD` (a dev-mode
+    file-watching flag with real overhead and zero benefit on an
+    immutable production image) — moved to a `command:` override on
+    `docker-compose.yml`'s `backend` service instead, so local dev's
+    hot-reload behavior is completely unchanged, just relocated to where
+    it actually belongs (the local-only compose file, not the image
+    Railway builds and runs directly).
+  - `CMD` now reads `$PORT` with an `${PORT:-8000}` fallback, via
+    `sh -c "exec uvicorn ... --port ${PORT:-8000}"` (the `exec` keeps
+    proper signal forwarding — no wrapper-shell zombie-process issue).
+    Railway and most PaaS platforms assign the listening port dynamically
+    through `$PORT`; docker-compose never sets that variable, so the
+    fallback keeps local dev on the same fixed `8000` as before.
+- **`docker-compose.yml`** — added the `command:` override described
+  above; nothing else changed.
+- **`frontend/src/api/client.ts`** — `API_BASE` now reads
+  `VITE_API_BASE_URL` (falling back to the existing relative `/api` when
+  unset, i.e. local dev is byte-for-byte unchanged). Also added a new
+  exported `resolveAssetUrl()`, and — **this was the real find in this
+  pass, not just following the literal checklist** — wired it into
+  `MachineDetailPage.tsx`'s mark-done photo `<img src>`. The backend's
+  `POST /photos` has always returned a bare relative path
+  (`/uploads/xxx.jpg`); locally that only ever worked because Vite's dev
+  server proxies `/uploads/*` to the backend, and that proxy simply
+  doesn't exist in a static Vercel build. Without this fix, every
+  proof-of-completion photo would have silently 404'd the moment this
+  went live — the JSON API calls would have worked fine (that was the
+  literal ask), but photos would have quietly broken. Caught by tracing
+  every place a backend-relative path reaches the browser, not just the
+  one call site named in the request.
+- **`frontend/.env.example`** — documented the new `VITE_API_BASE_URL`
+  alongside the existing `VITE_BACKEND_URL`, and explained why there are
+  two (one Node-side dev-proxy-only, one browser-bundled production-only
+  — easy to conflate, so spelled out explicitly).
+- **`frontend/vercel.json`** (new, not one of the six items asked for) —
+  a standard SPA rewrite (`/(.*)` → `/index.html`). This app is a
+  client-side-routed SPA (`react-router-dom`, five routes including a
+  dynamic `/machines/:id`) being deployed as a static build; without this,
+  every deep link or page refresh on a non-root route 404s against
+  Vercel's static hosting. Added proactively because the failure mode is
+  bad (the app looks broken on the very first refresh) and the fix is a
+  single, well-understood, zero-risk file — flagged clearly here and in
+  the chat report rather than silently expanding scope.
+- **`DEPLOYMENT.md`** (new) — the requested checklist: every backend env
+  var Railway needs (required vs optional, with what value to use),
+  every frontend env var Vercel needs, plus every Railway/Vercel-specific
+  behavior this session could not verify directly (see below).
+- **`README.md`** — one-line pointer to `DEPLOYMENT.md`, matching the
+  existing doc-cross-reference pattern at the top of the file.
+
+### A second real gap surfaced, not fixed (flagged, correctly out of scope)
+
+`backend/app/main.py` mounts `/uploads` **unauthenticated** — the existing
+code comment justifying that explicitly cites `architecture.md`'s old
+"no public internet exposure, internal tool only" assumption, i.e. the
+exact constraint this deployment change removes. Unguessable UUID
+filenames are a much weaker property once genuinely public on the
+internet (referrer leakage, logs, enumeration) than on a LAN. **Not
+changed** — fixing it means adding auth to a static-files mount, which is
+an application-logic change, and the user was explicit: "don't change any
+application logic — this is purely deployment config." Flagged here, in
+`DEPLOYMENT.md`, and in the chat report instead of being silently patched
+or silently ignored.
+
+### Verified
+
+No Docker daemon available in this sandbox (same limitation noted
+throughout this whole project — see §7/§8) — `docker build`/`docker
+compose up --build` could not be run directly. Verified everything else
+that could be, and was explicit in the report about the one thing that
+couldn't:
+
+- **`database_url` normalizer**: unit-level (all four cases — `postgres://`,
+  driver-less `postgresql://`, already-explicit `postgresql+psycopg2://`,
+  and a URL with `?sslmode=require` — normalize correctly, query string
+  preserved), and confirmed SQLAlchemy's `create_engine()` accepts each
+  result without error.
+- **End-to-end with a real database**: ran a genuine `alembic upgrade
+  head` against a **bare `postgresql://` URL** (no driver, simulating
+  Railway's likely format) against a real fresh Postgres 16 database —
+  succeeded, all 7 tables landed correctly. Then booted the actual FastAPI
+  app against that same bare-scheme URL and confirmed `GET /health`
+  (a real `SELECT 1` round-trip) returned `200`.
+- **`$PORT` handling**: ran the Dockerfile's literal `CMD` string (`sh -c
+  "exec uvicorn ... --port ${PORT:-8000}"`) directly — confirmed it
+  defaults to `8000` with `$PORT` unset, and correctly binds to a
+  different port (`4321`) when `$PORT` is set, with a real `/health`
+  request succeeding against that dynamic port.
+- **`docker-compose.yml` syntax**: `docker compose config` (validates
+  without needing a running daemon) — confirmed the `backend` service's
+  resolved `command` is exactly the pre-change `--reload` invocation,
+  unchanged.
+- **Frontend**: `tsc -b` and `oxlint` both clean (same two pre-existing
+  `useAsync.ts` warnings, nothing new). Ran the **actual local dev flow**
+  end to end in a real Playwright browser with `VITE_API_BASE_URL` unset
+  — login, machine list, mark a task done with a photo, confirmed the
+  photo's `<img src>` is still the bare `/uploads/...` path and the image
+  actually loads — proving local dev is byte-for-byte unaffected. Then
+  ran a **real production build** (`npm run build`, i.e. `tsc -b && vite
+  build`) twice: once unset (builds clean), once with
+  `VITE_API_BASE_URL=https://kuberpack-backend.up.railway.app` set —
+  confirmed by grepping the built JS bundle that the URL is genuinely
+  baked in via Vite's static env-var replacement, not just type-checked.
+
+**What could not be verified** (stated plainly, not guessed at — also in
+`DEPLOYMENT.md`'s closing section):
+- Railway's actual UI flow for wiring a `DATABASE_URL` reference from an
+  attached Postgres service.
+- Whether Railway's managed Postgres requires `sslmode=require` and
+  whether their provided `DATABASE_URL` already includes it.
+- Whether Railway Volumes are available/sufficient to make `UPLOADS_DIR`
+  persistent (uploaded photos are on local container disk, which is
+  ephemeral on most PaaS platforms including likely Railway — flagged as
+  a real, likely-to-bite issue in `DEPLOYMENT.md`, not fixed, since the
+  real fix — cloud storage — is application-code territory already
+  called out as open in `todo.md` Phase 5).
+- Vercel's exact auto-detected build command/output directory for a Vite
+  project once its project root is set to `frontend/`.

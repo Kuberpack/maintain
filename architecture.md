@@ -8,10 +8,10 @@
 - **Containerization:** Docker + docker-compose (frontend, backend, db as separate services)
 
 ## Deployment Strategy
-- Single internal deployment — runs on a shared PC or small internal server at the Sonipat plant, accessible over the local network.
-- No public internet exposure needed (internal tool only).
-- `docker-compose up` to run all services together.
-- Backups: scheduled PostgreSQL dumps (daily) to a local backup folder or external drive.
+- **Public online deployment**: frontend on Vercel (static SPA build), backend + PostgreSQL on Railway (backend built and run from `backend/Dockerfile`, Postgres as Railway's managed database). See `DEPLOYMENT.md` for the exact environment-variable checklist for both platforms.
+- Publicly accessible over HTTPS — both platforms terminate TLS at their edge. The earlier "internal tool only, no public exposure" assumption no longer applies: this data isn't financial or otherwise highly sensitive, so public hosting is fine, but standard hygiene still holds — HTTPS everywhere, no secrets committed to the repo, real random secrets set as environment variables on each platform rather than the placeholder values used in local dev.
+- Local `docker-compose up` (db + backend + frontend) remains fully supported for development and testing alongside the real deployment — it is not being retired, just no longer the only or production deployment path.
+- Backups: `scripts/backup.sh` (pg_dump-based, daily via host cron) still applies as-is to a local docker-compose Postgres. For the Railway-hosted database, backup strategy hasn't been revisited as part of this deployment-config change — check Railway's own backup/snapshot offering for the plan in use, or point `scripts/backup.sh` at the Railway `DATABASE_URL` instead if that's preferred.
 
 ## System Flow
 1. **Operator** logs into shared dashboard PC → sees machine list with status.

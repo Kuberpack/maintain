@@ -18,7 +18,7 @@ import { TaskTypesSection } from '../components/TaskTypesSection'
 import { RescheduleTaskInstanceForm } from '../components/RescheduleTaskInstanceForm'
 import { ResolveRepairLogForm } from '../components/ResolveRepairLogForm'
 import { useAuth } from '../auth/useAuth'
-import { ApiError } from '../api/client'
+import { ApiError, resolveAssetUrl } from '../api/client'
 import type { PartReplacement, RepairLog, TaskInstance } from '../api/types'
 
 type TimelineEntry =
@@ -265,7 +265,7 @@ export function MachineDetailPage() {
                       </p>
                       {entry.instance.photoUrl && (
                         <img
-                          src={entry.instance.photoUrl}
+                          src={resolveAssetUrl(entry.instance.photoUrl)}
                           alt="Proof of completion"
                           className="h-8 w-8 rounded object-cover"
                         />

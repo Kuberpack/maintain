@@ -79,7 +79,10 @@ export function ChecklistRunForm({
   }, [items])
 
   function updateDraft(id: string, patch: Partial<Draft>) {
-    setDrafts((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }))
+    setDrafts((prev) => {
+      const current: Draft = prev[id] ?? { itemStatus: '', numericValue: '', notes: '' }
+      return { ...prev, [id]: { ...current, ...patch } }
+    })
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -103,7 +106,7 @@ export function ChecklistRunForm({
       await markTaskInstanceDone(instance.id, {
         photoUrl,
         results: items.map((item) => {
-          const draft = drafts[item.id]
+          const draft = drafts[item.id] ?? { itemStatus: '' as const, numericValue: '', notes: '' }
           const numeric = draft.numericValue.trim() === '' ? undefined : Number(draft.numericValue)
           return {
             checklistItemId: item.id,

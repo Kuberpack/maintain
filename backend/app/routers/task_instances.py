@@ -20,10 +20,11 @@ from app.services.scheduling import reopen_task_instance as reopen_task_instance
 
 router = APIRouter(prefix="/task-instances", tags=["task_instances"])
 
-# Doing the work (mark-done) is operator+supervisor; managing the schedule
-# (manual create, reschedule) is supervisor only; management is read-only.
-_do_work_roles = require_roles(UserRole.operator, UserRole.supervisor)
-_manage_roles = require_roles(UserRole.supervisor)
+# Doing the work (mark-done) is operator+supervisor+admin; managing the
+# schedule (manual create, reschedule) is supervisor+admin; management is
+# read-only.
+_do_work_roles = require_roles(UserRole.operator, UserRole.supervisor, UserRole.admin)
+_manage_roles = require_roles(UserRole.supervisor, UserRole.admin)
 
 
 @router.get("", response_model=list[TaskInstancePublic])

@@ -33,7 +33,9 @@ export function MachineListPage() {
   return (
     <div className="mx-auto max-w-5xl p-4">
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Machines</h1>
-      {user?.role === 'supervisor' && <CreateMachineForm onCreated={() => void machines.refetch()} />}
+      {(user?.role === 'supervisor' || user?.role === 'admin') && (
+        <CreateMachineForm onCreated={() => void machines.refetch()} />
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {machineList.map((machine) => {
           const activeStatuses = taskInstanceList

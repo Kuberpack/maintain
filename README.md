@@ -1,7 +1,8 @@
 # Machine Maintenance & Cleaning Tracker
 
 Internal tool for Kuberpack's Sonipat plant. See `CLAUDE.md`, `architecture.md`,
-`schema.md`, `todo.md` for context, design, and data model.
+`schema.md`, `todo.md` for context, design, and data model. For the real
+online deployment (Vercel + Railway) rather than local dev, see `DEPLOYMENT.md`.
 
 ## Stack
 
@@ -82,19 +83,23 @@ Dummy login credentials (all `@kuberpack.com` / phone numbers are fake):
 
 For a real deployment, don't run `seed.py` -- it wipes and replaces
 everything with the dummy data above. Instead, create exactly one real
-supervisor account with `backend/app/create_supervisor.py`, then use that
-account to add real machines, task types, and staff through the app itself
-(machine/task-type/user creation all require being logged in as a
-supervisor, so this one account is what unblocks everything else):
+admin or supervisor account with `backend/app/bootstrap_account.py`, then
+use that account to add real machines, task types, and staff through the
+app itself (machine/task-type creation and user management all require
+being logged in as at least a supervisor, so this one account is what
+unblocks everything else):
 
 ```bash
-docker compose exec backend python -m app.create_supervisor
+docker compose exec backend python -m app.bootstrap_account
 ```
 
-Prompts for name, phone number, and PIN (the PIN prompt is hidden, like a
-password field). Touches nothing else in the database -- safe to run
-against a database that already has real data in it, as long as the phone
-number you give it isn't already taken.
+Prompts for role (`admin` or `supervisor`), name, phone number, and PIN
+(the PIN prompt is hidden, like a password field). Touches nothing else in
+the database -- safe to run against a database that already has real data
+in it, as long as the phone number you give it isn't already taken. See
+`schema.md`/`architecture.md` for the difference between the two roles --
+briefly, `admin` can manage any user account (including other
+supervisors), while `supervisor` can only manage operator accounts.
 
 ## Backups
 

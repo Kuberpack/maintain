@@ -11,8 +11,8 @@ from app.schemas.machines import MachineCreate, MachinePublic, MachineUpdate
 
 router = APIRouter(prefix="/machines", tags=["machines"])
 
-# Management is explicitly read-only (architecture.md); only supervisor writes.
-_write_roles = require_roles(UserRole.supervisor)
+# Management is explicitly read-only (architecture.md); supervisor+admin write.
+_write_roles = require_roles(UserRole.supervisor, UserRole.admin)
 
 
 @router.get("", response_model=list[MachinePublic])

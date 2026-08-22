@@ -19,6 +19,11 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    # Local-dev-only override of the image's production CMD: adds
+    # --reload, which pairs with the bind mount below to hot-reload on
+    # source changes. Not present in the Dockerfile itself since Railway
+    # builds/runs that image directly, without this compose file.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     env_file:
       - ./backend/.env
     environment:

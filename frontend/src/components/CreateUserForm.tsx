@@ -5,19 +5,23 @@ import { ApiError } from '../api/client'
 import type { UserRole } from '../api/types'
 
 interface CreateUserFormProps {
+  // Roles this creator is allowed to assign -- admin gets all four, a
+  // supervisor only ever gets ['operator'].
+  allowedRoles: UserRole[]
   onCreated: () => void
   onCancel: () => void
 }
 
-const ROLES: { value: UserRole; label: string }[] = [
-  { value: 'operator', label: 'Operator' },
-  { value: 'supervisor', label: 'Supervisor' },
-  { value: 'management', label: 'Management' },
-]
+const ROLE_LABELS: Record<UserRole, string> = {
+  operator: 'Operator',
+  supervisor: 'Supervisor',
+  management: 'Management',
+  admin: 'Admin',
+}
 
-export function CreateUserForm({ onCreated, onCancel }: CreateUserFormProps) {
+export function CreateUserForm({ allowedRoles, onCreated, onCancel }: CreateUserFormProps) {
   const [name, setName] = useState('')
-  const [role, setRole] = useState<UserRole>('operator')
+  const [role, setRole] = useState<UserRole>(allowedRoles[0] ?? 'operator')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [pin, setPin] = useState('')
   const [email, setEmail] = useState('')
@@ -27,6 +31,7 @@ export function CreateUserForm({ onCreated, onCancel }: CreateUserFormProps) {
   const [error, setError] = useState<string | null>(null)
 
   const isManagement = role === 'management'
+  const canPickRole = allowedRoles.length > 1
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -63,20 +68,24 @@ export function CreateUserForm({ onCreated, onCancel }: CreateUserFormProps) {
           className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
         />
       </label>
-      <label className="flex flex-col gap-1 text-sm">
+      <div className="flex flex-col gap-1 text-sm">
         <span className="font-medium text-slate-700">Role</span>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as UserRole)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
-        >
-          {ROLES.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
-          ))}
-        </select>
-      </label>
+        {canPickRole ? (
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as UserRole)}
+            className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
+          >
+            {allowedRoles.map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r]}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <p className="text-slate-500">{ROLE_LABELS[role]}</p>
+        )}
+      </div>
       {isManagement ? (
         <>
           <label className="flex flex-col gap-1 text-sm">

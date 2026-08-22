@@ -12,7 +12,7 @@ router = APIRouter(prefix="/photos", tags=["photos"])
 
 # Same roles as who marks tasks done -- this endpoint only exists to back
 # that flow's proof-of-completion photo.
-_upload_roles = require_roles(UserRole.operator, UserRole.supervisor)
+_upload_roles = require_roles(UserRole.operator, UserRole.supervisor, UserRole.admin)
 
 _EXTENSION_BY_CONTENT_TYPE = {
     "image/jpeg": ".jpg",

@@ -5,14 +5,22 @@ import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
 import { CreateUserForm } from '../components/CreateUserForm'
 import { EditUserForm } from '../components/EditUserForm'
-import type { User } from '../api/types'
+import type { User, UserRole } from '../api/types'
+
+const ALL_ROLES: UserRole[] = ['admin', 'supervisor', 'management', 'operator']
 
 export function UsersPage() {
   const { user: currentUser } = useAuth()
-  // GET /users is supervisor+management on the backend; operators only ever
-  // see themselves via GET /auth/me, so this page has nothing to show them.
-  const canView = currentUser?.role === 'supervisor' || currentUser?.role === 'management'
-  const canManage = currentUser?.role === 'supervisor'
+  // GET /users is admin+supervisor+management on the backend; operators
+  // only ever see themselves via GET /auth/me (and now My Profile for
+  // self-editing), so this page has nothing to show them.
+  const canView =
+    currentUser?.role === 'admin' || currentUser?.role === 'supervisor' || currentUser?.role === 'management'
+  const canCreate = currentUser?.role === 'admin' || currentUser?.role === 'supervisor'
+  // What roles this viewer is allowed to assign when creating/editing someone
+  // else -- admin manages anyone, a supervisor only ever operators. Matches
+  // backend/app/routers/users.py::_check_can_manage_target exactly.
+  const allowedRoles: UserRole[] = currentUser?.role === 'admin' ? ALL_ROLES : ['operator']
 
   const users = useAsync(() => (canView ? listUsers() : Promise.resolve([])), [canView])
 
@@ -22,7 +30,7 @@ export function UsersPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   if (!canView) {
-    return <p className="p-6 text-slate-500">User management is only available to supervisors and management.</p>
+    return <p className="p-6 text-slate-500">User management is only available to supervisors, admins, and management.</p>
   }
 
   if (users.loading) return <p className="p-6 text-slate-500">Loading…</p>
@@ -30,6 +38,16 @@ export function UsersPage() {
   if (!users.data) return null
 
   const userList = users.data
+
+  // Whether the viewer can edit/delete *this* row -- self-editing is
+  // handled by the separate My Profile page instead, so it's always
+  // excluded here. Mirrors the backend's per-target scope check exactly.
+  function canManageRow(rowUser: User): boolean {
+    if (rowUser.id === currentUser?.id) return false
+    if (currentUser?.role === 'admin') return true
+    if (currentUser?.role === 'supervisor') return rowUser.role === 'operator'
+    return false
+  }
 
   async function handleDelete(target: User) {
     const confirmed = window.confirm(`Delete ${target.name}? This cannot be undone.`)
@@ -50,9 +68,10 @@ export function UsersPage() {
     <div className="mx-auto max-w-3xl p-4">
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Users</h1>
 
-      {canManage &&
+      {canCreate &&
         (creating ? (
           <CreateUserForm
+            allowedRoles={allowedRoles}
             onCreated={() => {
               setCreating(false)
               void users.refetch()
@@ -77,6 +96,8 @@ export function UsersPage() {
             {editingId === u.id ? (
               <EditUserForm
                 user={u}
+                isSelf={false}
+                allowedRoles={allowedRoles}
                 onSaved={() => {
                   setEditingId(null)
                   void users.refetch()
@@ -95,7 +116,7 @@ export function UsersPage() {
                     {u.whatsappNumber ? ` · WA ${u.whatsappNumber}` : ''}
                   </p>
                 </div>
-                {canManage && (
+                {canManageRow(u) && (
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -104,16 +125,14 @@ export function UsersPage() {
                     >
                       Edit
                     </button>
-                    {u.id !== currentUser?.id && (
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(u)}
-                        disabled={deletingId === u.id}
-                        className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        {deletingId === u.id ? 'Deleting…' : 'Delete'}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(u)}
+                      disabled={deletingId === u.id}
+                      className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {deletingId === u.id ? 'Deleting…' : 'Delete'}
+                    </button>
                   </div>
                 )}
               </div>

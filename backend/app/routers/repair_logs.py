@@ -12,10 +12,10 @@ from app.schemas.repair_logs import RepairLogCreate, RepairLogPublic, RepairLogR
 
 router = APIRouter(prefix="/repair-logs", tags=["repair_logs"])
 
-# Reporting an issue is operator+supervisor (floor-level); resolving it is
-# supervisor only; management is read-only.
-_report_roles = require_roles(UserRole.operator, UserRole.supervisor)
-_resolve_roles = require_roles(UserRole.supervisor)
+# Reporting an issue is operator+supervisor+admin (floor-level); resolving
+# it is supervisor+admin; management is read-only.
+_report_roles = require_roles(UserRole.operator, UserRole.supervisor, UserRole.admin)
+_resolve_roles = require_roles(UserRole.supervisor, UserRole.admin)
 
 
 @router.get("", response_model=list[RepairLogPublic])

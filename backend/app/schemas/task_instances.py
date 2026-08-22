@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from app.models import TaskStatus
 from app.schemas.base import CamelModel
+from app.schemas.checklists import ChecklistItemResultInput, ChecklistItemResultPublic
 
 
 class TaskInstanceCreate(CamelModel):
@@ -16,6 +17,7 @@ class TaskInstanceCreate(CamelModel):
 class TaskInstanceMarkDone(CamelModel):
     notes: str | None = None
     photo_url: str | None = None
+    results: list[ChecklistItemResultInput] | None = None
 
 
 class TaskInstanceReschedule(CamelModel):

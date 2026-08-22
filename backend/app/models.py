@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,12 +22,20 @@ class TaskCategory(str, enum.Enum):
     oiling = "oiling"
     part_replacement = "part_replacement"
     repair = "repair"
+    preventive = "preventive"
 
 
 class TaskStatus(str, enum.Enum):
     pending = "pending"
     done = "done"
     overdue = "overdue"
+
+
+class ChecklistItemStatus(str, enum.Enum):
+    ok = "ok"
+    attention = "attention"
+    critical = "critical"
+    planned = "planned"
 
 
 class User(Base):
@@ -105,6 +113,9 @@ class TaskType(Base):
     task_instances: Mapped[list["TaskInstance"]] = relationship(
         back_populates="task_type", cascade="all, delete-orphan"
     )
+    checklist_items: Mapped[list["ChecklistItem"]] = relationship(
+        back_populates="task_type", cascade="all, delete-orphan", order_by="ChecklistItem.sort_order"
+    )
 
 
 class TaskInstance(Base):
@@ -133,6 +144,49 @@ class TaskInstance(Base):
     rescheduled_by_user: Mapped["User | None"] = relationship(
         foreign_keys=[rescheduled_by], back_populates="rescheduled_task_instances"
     )
+    checklist_item_results: Mapped[list["ChecklistItemResult"]] = relationship(
+        back_populates="task_instance", cascade="all, delete-orphan"
+    )
+
+
+class ChecklistItem(Base):
+    __tablename__ = "checklist_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("task_types.id", ondelete="CASCADE")
+    )
+    section: Mapped[str] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(Integer)
+    description: Mapped[str] = mapped_column(Text)
+    requires_value: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    value_unit: Mapped[str | None] = mapped_column(String(50))
+
+    task_type: Mapped["TaskType"] = relationship(back_populates="checklist_items")
+    results: Mapped[list["ChecklistItemResult"]] = relationship(
+        back_populates="checklist_item", cascade="all, delete-orphan"
+    )
+
+
+class ChecklistItemResult(Base):
+    __tablename__ = "checklist_item_results"
+    __table_args__ = (UniqueConstraint("task_instance_id", "checklist_item_id", name="uq_checklist_result_instance_item"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_instance_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("task_instances.id", ondelete="CASCADE")
+    )
+    checklist_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("checklist_items.id", ondelete="CASCADE")
+    )
+    item_status: Mapped[ChecklistItemStatus] = mapped_column(
+        SAEnum(ChecklistItemStatus, name="checklist_item_status")
+    )
+    numeric_value: Mapped[float | None] = mapped_column(Float)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    task_instance: Mapped["TaskInstance"] = relationship(back_populates="checklist_item_results")
+    checklist_item: Mapped["ChecklistItem"] = relationship(back_populates="results")
 
 
 class PartReplacement(Base):

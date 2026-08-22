@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
-from app.models import TaskInstance, TaskStatus, TaskType, User, UserRole
+from app.models import ChecklistItemResult, TaskInstance, TaskStatus, TaskType, User, UserRole
+from app.schemas.checklists import ChecklistItemResultPublic
 from app.schemas.task_instances import (
     TaskInstanceCreate,
     TaskInstanceMarkDone,
@@ -47,6 +48,18 @@ def get_task_instance(
     return get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
 
 
+@router.get("/{task_instance_id}/checklist-results", response_model=list[ChecklistItemResultPublic])
+def list_task_instance_checklist_results(
+    task_instance_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(get_current_user)
+) -> list[ChecklistItemResult]:
+    get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    return (
+        db.query(ChecklistItemResult)
+        .filter(ChecklistItemResult.task_instance_id == task_instance_id)
+        .all()
+    )
+
+
 @router.post("", response_model=TaskInstancePublic, status_code=201)
 def create_task_instance(
     payload: TaskInstanceCreate, db: Session = Depends(get_db), _user=Depends(_manage_roles)
@@ -68,7 +81,12 @@ def mark_task_instance_done(
 ) -> TaskInstanceMarkDoneResponse:
     task_instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
     next_instance = complete_task_instance(
-        db, task_instance, current_user.id, notes=payload.notes, photo_url=payload.photo_url
+        db,
+        task_instance,
+        current_user.id,
+        notes=payload.notes,
+        photo_url=payload.photo_url,
+        results=payload.results,
     )
     db.commit()
     db.refresh(task_instance)

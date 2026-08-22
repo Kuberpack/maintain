@@ -12,6 +12,7 @@ interface TaskTypeFormProps {
 }
 
 const CATEGORIES: { value: TaskCategory; label: string }[] = [
+  { value: 'preventive', label: 'Preventive' },
   { value: 'cleaning', label: 'Cleaning' },
   { value: 'oiling', label: 'Oiling' },
   { value: 'part_replacement', label: 'Part replacement' },
@@ -20,7 +21,7 @@ const CATEGORIES: { value: TaskCategory; label: string }[] = [
 
 export function TaskTypeForm({ machineId, taskType, onSaved, onCancel }: TaskTypeFormProps) {
   const isEdit = Boolean(taskType)
-  const [category, setCategory] = useState<TaskCategory>(taskType?.category ?? 'cleaning')
+  const [category, setCategory] = useState<TaskCategory>(taskType?.category ?? 'preventive')
   const [description, setDescription] = useState(taskType?.description ?? '')
   const [intervalDays, setIntervalDays] = useState(
     taskType?.defaultIntervalDays != null ? String(taskType.defaultIntervalDays) : '',

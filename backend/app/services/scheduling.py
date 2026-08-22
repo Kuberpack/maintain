@@ -5,7 +5,116 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.time import today_local
-from app.models import TaskInstance, TaskStatus
+from app.models import ChecklistItem, ChecklistItemResult, TaskInstance, TaskStatus
+from app.schemas.checklists import ChecklistItemResultInput
+
+
+def apply_checklist_results(
+    db: Session,
+    task_instance: TaskInstance,
+    results: list[ChecklistItemResultInput] | None,
+) -> None:
+    """Require a result for every checklist item on the task type, if any exist."""
+    items = (
+        db.query(ChecklistItem)
+        .filter(ChecklistItem.task_type_id == task_instance.task_type_id)
+        .order_by(ChecklistItem.sort_order)
+        .all()
+    )
+    if not items:
+        return
+
+    if not results:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Checklist results are required for this preventive task",
+        )
+
+    items_by_id = {item.id: item for item in items}
+    seen: set[uuid.UUID] = set()
+    for result in results:
+        if result.checklist_item_id in seen:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Duplicate checklist item result",
+            )
+        seen.add(result.checklist_item_id)
+        item = items_by_id.get(result.checklist_item_id)
+        if item is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Checklist result does not belong to this task type",
+            )
+        if item.requires_value and result.numeric_value is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"A numeric reading is required: {item.description}",
+            )
+
+    missing = [item.description for item in items if item.id not in seen]
+    if missing:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Every checklist item needs a status before this task can be marked done",
+        )
+
+    db.query(ChecklistItemResult).filter(ChecklistItemResult.task_instance_id == task_instance.id).delete(
+        synchronize_session=False
+    )
+    for result in results:
+        db.add(
+            ChecklistItemResult(
+                task_instance_id=task_instance.id,
+                checklist_item_id=result.checklist_item_id,
+                item_status=result.item_status,
+                numeric_value=result.numeric_value,
+                notes=result.notes,
+            )
+        )
+
+
+def complete_task_instance(
+    db: Session,
+    task_instance: TaskInstance,
+    completed_by: uuid.UUID,
+    notes: str | None = None,
+    photo_url: str | None = None,
+    results: list[ChecklistItemResultInput] | None = None,
+) -> TaskInstance | None:
+    """Mark a task instance done and, for recurring task types, create the
+    next occurrence. This is the single place in the app that computes a
+    next due_date -- nothing else creates a follow-on task_instance.
+
+    The next due_date is computed from the completion date, not the original
+    due_date: a late cleaning doesn't compound the lateness of every future
+    occurrence, it just restarts the interval from when the work actually
+    happened (matches architecture.md: "resets the next-due date").
+
+    Returns the newly created next TaskInstance, or None if this task type
+    isn't recurring (e.g. repair, which is event-driven per schema.md).
+    """
+    apply_checklist_results(db, task_instance, results)
+
+    now = datetime.now(timezone.utc)
+    task_instance.status = TaskStatus.done
+    task_instance.completed_at = now
+    task_instance.completed_by = completed_by
+    if notes is not None:
+        task_instance.notes = notes
+    if photo_url is not None:
+        task_instance.photo_url = photo_url
+
+    interval_days = task_instance.task_type.default_interval_days
+    if interval_days is None:
+        return None
+
+    next_instance = TaskInstance(
+        task_type_id=task_instance.task_type_id,
+        due_date=today_local() + timedelta(days=interval_days),
+        status=TaskStatus.pending,
+    )
+    db.add(next_instance)
+    return next_instance
 
 
 def complete_task_instance(
@@ -85,6 +194,10 @@ def reopen_task_instance(db: Session, task_instance: TaskInstance) -> TaskInstan
 
     for later in later_instances:
         db.delete(later)
+
+    db.query(ChecklistItemResult).filter(ChecklistItemResult.task_instance_id == task_instance.id).delete(
+        synchronize_session=False
+    )
 
     task_instance.status = TaskStatus.pending
     task_instance.completed_at = None

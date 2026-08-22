@@ -28,9 +28,36 @@ Defines the recurring task templates per machine.
 |---|---|---|
 | id | uuid, PK | |
 | machine_id | uuid, FK → machines.id | |
-| category | enum | cleaning / oiling / part_replacement / repair |
-| description | text | e.g. "clean rollers", "grease bearing #3" |
+| category | enum | cleaning / oiling / part_replacement / repair / preventive |
+| description | text | e.g. "Daily Preventive Maintenance" |
 | default_interval_days | int | null for repair (event-driven, not scheduled) |
+
+## `checklist_items`
+Inspection points on a preventive (or other) task type. Completing a `task_instance` of that type requires a result for every item.
+
+| column | type | notes |
+|---|---|---|
+| id | uuid, PK | |
+| task_type_id | uuid, FK → task_types.id | |
+| section | text | grouping, e.g. "Single Facer" |
+| sort_order | int | display order |
+| description | text | inspection point |
+| requires_value | bool | if true, a numeric reading is required |
+| value_unit | text | e.g. bar, °C; null when not measured |
+
+## `checklist_item_results`
+Per-run status for one inspection point.
+
+| column | type | notes |
+|---|---|---|
+| id | uuid, PK | |
+| task_instance_id | uuid, FK → task_instances.id | |
+| checklist_item_id | uuid, FK → checklist_items.id | |
+| item_status | enum | ok / attention / critical / planned (GREEN/YELLOW/RED/BLUE) |
+| numeric_value | float | optional reading |
+| notes | text | |
+
+Unique on `(task_instance_id, checklist_item_id)`.
 
 ## `task_instances`
 Each scheduled/actual occurrence of a task — this is the log + schedule combined.
@@ -72,6 +99,8 @@ Each scheduled/actual occurrence of a task — this is the log + schedule combin
 
 ## Relationships
 - `machines` 1—N `task_types` 1—N `task_instances`
+- `task_types` 1—N `checklist_items`
+- `task_instances` 1—N `checklist_item_results`
 - `machines` 1—N `part_replacements`
 - `machines` 1—N `repair_logs`
 - `users` 1—N `task_instances` (as completer/rescheduler), `part_replacements`, `repair_logs`

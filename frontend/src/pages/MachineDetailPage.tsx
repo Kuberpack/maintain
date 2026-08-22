@@ -16,7 +16,8 @@ import { LogPartReplacementForm } from '../components/LogPartReplacementForm'
 import { EditMachineForm } from '../components/EditMachineForm'
 import { TaskTypesSection } from '../components/TaskTypesSection'
 import { RescheduleTaskInstanceForm } from '../components/RescheduleTaskInstanceForm'
-import { ResolveRepairLogForm } from '../components/ResolveRepairLogForm'
+import { ChecklistRunForm } from '../components/ChecklistRunForm'
+import { ChecklistResultsView } from '../components/ChecklistResultsView'
 import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
 import type { PartReplacement, RepairLog, TaskInstance } from '../api/types'
@@ -46,6 +47,8 @@ export function MachineDetailPage() {
   const config = useAsync(() => getPublicConfig(), [])
 
   const [markingId, setMarkingId] = useState<string | null>(null)
+  const [checklistInstanceId, setChecklistInstanceId] = useState<string | null>(null)
+  const [historyChecklistId, setHistoryChecklistId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [reopeningId, setReopeningId] = useState<string | null>(null)
   const [reopenError, setReopenError] = useState<string | null>(null)
@@ -197,17 +200,27 @@ export function MachineDetailPage() {
               return (
                 <li
                   key={instance.id}
-                  className="flex flex-col gap-3 rounded-md border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-md border border-slate-200 p-3"
                 >
-                  <div>
-                    <p className="font-medium text-slate-900">{taskType?.description ?? 'Task'}</p>
-                    <p className="text-sm text-slate-500">
-                      {taskType?.category} · Due {instance.dueDate}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-medium text-slate-900">{taskType?.description ?? 'Task'}</p>
+                      <p className="text-sm text-slate-500">
+                        {taskType?.category} · Due {instance.dueDate}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={displayStatus} />
-                    {canDoFloorWork && (
+                    {canDoFloorWork && taskType?.category === 'preventive' && checklistInstanceId !== instance.id && (
+                          <button
+                            type="button"
+                            onClick={() => setChecklistInstanceId(instance.id)}
+                            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+                          >
+                            Open checklist
+                          </button>
+                    )}
+                    {canDoFloorWork && taskType?.category !== 'preventive' && (
                       <>
                         <CameraCapture
                           photo={photos[instance.id] ?? null}
@@ -229,7 +242,22 @@ export function MachineDetailPage() {
                         onRescheduled={() => void taskInstances.refetch()}
                       />
                     )}
+                    </div>
                   </div>
+                    {canDoFloorWork && taskType?.category === 'preventive' && checklistInstanceId === instance.id && (
+                            <ChecklistRunForm
+                              instance={instance}
+                              taskTypeId={taskType.id}
+                              photo={photos[instance.id] ?? null}
+                              onPhotoChange={(file) => setPhotos((prev) => ({ ...prev, [instance.id]: file }))}
+                              onCompleted={async () => {
+                                setPhotos((prev) => ({ ...prev, [instance.id]: null }))
+                                setChecklistInstanceId(null)
+                                await taskInstances.refetch()
+                              }}
+                              onCancel={() => setChecklistInstanceId(null)}
+                            />
+                    )}
                 </li>
               )
             })}
@@ -256,7 +284,8 @@ export function MachineDetailPage() {
                 className="rounded-md border border-slate-200 p-3"
               >
                 {entry.kind === 'task' && (
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-3">
                       <p className="text-sm text-slate-700">
                         <span className="font-medium">Completed:</span>{' '}
@@ -271,6 +300,20 @@ export function MachineDetailPage() {
                         />
                       )}
                     </div>
+                    <div className="flex flex-wrap gap-2">
+                      {taskTypeById.get(entry.instance.taskTypeId)?.category === 'preventive' && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setHistoryChecklistId(
+                              historyChecklistId === entry.instance.id ? null : entry.instance.id,
+                            )
+                          }
+                          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          {historyChecklistId === entry.instance.id ? 'Hide checklist' : 'View checklist'}
+                        </button>
+                      )}
                     {canDoFloorWork && (
                       <button
                         type="button"
@@ -280,6 +323,14 @@ export function MachineDetailPage() {
                       >
                         {reopeningId === entry.instance.id ? 'Reopening…' : 'Reopen'}
                       </button>
+                    )}
+                    </div>
+                    </div>
+                    {historyChecklistId === entry.instance.id && (
+                      <ChecklistResultsView
+                        taskTypeId={entry.instance.taskTypeId}
+                        taskInstanceId={entry.instance.id}
+                      />
                     )}
                   </div>
                 )}

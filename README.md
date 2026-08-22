@@ -54,20 +54,18 @@ npm run dev
 
 ## Seed data
 
-This project has no real machine/task/staff data yet. `backend/app/seed.py`
-wipes and reseeds the database with realistic dummy data -- 5 machines,
-16 task types across them with varied intervals, 6 users across all three
-roles, plus example task instances, repair logs, and part replacements --
-so the schema and flows can be tested end-to-end:
+`backend/app/seed.py` wipes and reseeds the database with the 18 plant
+machines, preventive-maintenance checklists (full corrugation list plus
+generic templates for the rest), 6 users across all three roles, plus
+example repair logs and part replacements:
 
 ```bash
 cd backend
 .venv/bin/python -m app.seed
 ```
 
-The `MACHINES` / `USERS` / `TASK_TYPES` constants at the top of that file are
-placeholders. Swapping in real data later means editing those constants, not
-rewriting the seeding logic.
+Do not run seed against a database that already has real floor history
+unless you have a backup — it deletes existing machines, tasks, and users.
 
 Dummy login credentials (all `@kuberpack.com` / phone numbers are fake):
 

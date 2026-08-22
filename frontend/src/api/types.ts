@@ -1,5 +1,5 @@
 export type UserRole = 'operator' | 'supervisor' | 'management'
-export type TaskCategory = 'cleaning' | 'oiling' | 'part_replacement' | 'repair'
+export type TaskCategory = 'cleaning' | 'oiling' | 'part_replacement' | 'repair' | 'preventive'
 export type TaskStatus = 'pending' | 'done' | 'overdue'
 
 export interface User {
@@ -43,6 +43,34 @@ export interface TaskInstance {
 export interface TaskInstanceMarkDoneResponse {
   completed: TaskInstance
   next: TaskInstance | null
+}
+
+export type ChecklistItemStatus = 'ok' | 'attention' | 'critical' | 'planned'
+
+export interface ChecklistItem {
+  id: string
+  taskTypeId: string
+  section: string
+  sortOrder: number
+  description: string
+  requiresValue: boolean
+  valueUnit: string | null
+}
+
+export interface ChecklistItemResult {
+  id: string
+  taskInstanceId: string
+  checklistItemId: string
+  itemStatus: ChecklistItemStatus
+  numericValue: number | null
+  notes: string | null
+}
+
+export interface ChecklistItemResultInput {
+  checklistItemId: string
+  itemStatus: ChecklistItemStatus
+  numericValue?: number | null
+  notes?: string | null
 }
 
 export interface RepairLog {

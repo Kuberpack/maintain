@@ -17,7 +17,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
 
   if (user) {
-    return <Navigate to={user.role === 'management' ? '/summary' : '/'} replace />
+    return <Navigate to={user.role === 'management' ? '/summary' : user.role === 'operator' ? '/today' : '/'} replace />
   }
 
   async function handleSubmit(e: FormEvent) {

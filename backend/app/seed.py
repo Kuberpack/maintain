@@ -1,7 +1,4 @@
-"""Seed the database with realistic dummy data for local development and
-testing. There is no real Kuberpack data yet -- the MACHINES/USERS/
-TASK_TYPES constants below are placeholders. When real data is available,
-replace those constants; the seeding logic itself shouldn't need to change.
+"""Seed the database with Kuberpack plant machines and PM checklists.
 
 Destructive: wipes existing machines/users/task data before reseeding.
 
@@ -12,8 +9,13 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.security import hash_secret
 from app.core.time import today_local
+from app.data.checklists import CORRUGATION, ETP, GENERIC
+from app.data.checklists.common import PmTemplate
 from app.database import SessionLocal
 from app.models import (
+    ChecklistItem,
+    ChecklistItemResult,
+    HandoverNote,
     Machine,
     PartReplacement,
     RepairLog,
@@ -23,20 +25,28 @@ from app.models import (
     User,
     UserRole,
 )
-from app.services.scheduling import complete_task_instance
-
-# --- Dummy data: replace with real Kuberpack data when available -----------
 
 MACHINES = [
-    {"name": "Corrugator 1", "type": "corrugator", "location": "Bay A"},
-    {"name": "Flexo Printer 1", "type": "printer", "location": "Bay B"},
-    {"name": "Folder-Gluer 1", "type": "folder-gluer", "location": "Bay B"},
-    {"name": "Laminator 1", "type": "laminator", "location": "Bay C"},
-    {"name": "Die-Cutter 1", "type": "die-cutter", "location": "Bay C"},
+    {"name": "Corrugation Machine", "type": "corrugator", "location": "Sonipat plant"},
+    {"name": "Lead Edge Printing", "type": "printer", "location": "Sonipat plant"},
+    {"name": "Chain Feeder Printing", "type": "printer", "location": "Sonipat plant"},
+    {"name": "Auto Gluer Machine", "type": "folder-gluer", "location": "Sonipat plant"},
+    {"name": "Auto Gluer Machine DGM", "type": "folder-gluer", "location": "Sonipat plant"},
+    {"name": "Auto Stitching Machine", "type": "stitcher", "location": "Sonipat plant"},
+    {"name": "Semi Auto Stitching Machine", "type": "stitcher", "location": "Sonipat plant"},
+    {"name": "Flat Bed Die", "type": "die-cutter", "location": "Sonipat plant"},
+    {"name": "Die Punching Machine - 56x76 (old)", "type": "die-cutter", "location": "Sonipat plant"},
+    {"name": "Die Punching Machine - 44x56 (new)", "type": "die-cutter", "location": "Sonipat plant"},
+    {"name": "Die Punching Machine - 52x72 (small)", "type": "die-cutter", "location": "Sonipat plant"},
+    {"name": "Rotary", "type": "rotary", "location": "Sonipat plant"},
+    {"name": "Flute Laminator", "type": "laminator", "location": "Sonipat plant"},
+    {"name": "Manual Pasting", "type": "pasting", "location": "Sonipat plant"},
+    {"name": "Manual Stitching Machine (1)", "type": "stitcher", "location": "Sonipat plant"},
+    {"name": "Manual Stitching Machine (2)", "type": "stitcher", "location": "Sonipat plant"},
+    {"name": "Manual Stitching Machine (3)", "type": "stitcher", "location": "Sonipat plant"},
+    {"name": "ETP and STP", "type": "utility", "location": "Sonipat plant"},
 ]
 
-# pin/password are plaintext here only because this is the seed script --
-# hashed via hash_secret() before ever touching the users table.
 USERS = [
     {"name": "Ramesh Kumar", "role": UserRole.operator, "phone_number": "9812345001", "pin": "1234"},
     {"name": "Suresh Yadav", "role": UserRole.operator, "phone_number": "9812345002", "pin": "2345"},
@@ -52,71 +62,27 @@ USERS = [
     },
 ]
 
-# machine name -> task types for that machine. default_interval_days is
-# omitted (None) for repair -- event-driven, not scheduled, per schema.md.
-TASK_TYPES: dict[str, list[dict]] = {
-    "Corrugator 1": [
-        {"category": TaskCategory.cleaning, "description": "Clean rollers and belts", "default_interval_days": 7},
-        {"category": TaskCategory.oiling, "description": "Grease main shaft bearings", "default_interval_days": 14},
-        {
-            "category": TaskCategory.part_replacement,
-            "description": "Inspect/replace glue applicator tips",
-            "default_interval_days": 30,
-        },
-        {"category": TaskCategory.repair, "description": "Unscheduled repair", "default_interval_days": None},
-    ],
-    "Flexo Printer 1": [
-        {
-            "category": TaskCategory.cleaning,
-            "description": "Clean print rollers and ink trays",
-            "default_interval_days": 3,
-        },
-        {"category": TaskCategory.oiling, "description": "Oil drive chain", "default_interval_days": 14},
-        {"category": TaskCategory.repair, "description": "Unscheduled repair", "default_interval_days": None},
-    ],
-    "Folder-Gluer 1": [
-        {"category": TaskCategory.cleaning, "description": "Clean glue nozzles", "default_interval_days": 5},
-        {"category": TaskCategory.oiling, "description": "Lubricate folding belts", "default_interval_days": 21},
-        {"category": TaskCategory.repair, "description": "Unscheduled repair", "default_interval_days": None},
-    ],
-    "Laminator 1": [
-        {"category": TaskCategory.cleaning, "description": "Clean laminate rollers", "default_interval_days": 7},
-        {
-            "category": TaskCategory.oiling,
-            "description": "Grease heating roller bearings",
-            "default_interval_days": 30,
-        },
-        {"category": TaskCategory.repair, "description": "Unscheduled repair", "default_interval_days": None},
-    ],
-    "Die-Cutter 1": [
-        {"category": TaskCategory.cleaning, "description": "Clean cutting bed", "default_interval_days": 7},
-        {
-            "category": TaskCategory.part_replacement,
-            "description": "Replace cutting die blades",
-            "default_interval_days": 60,
-        },
-        {"category": TaskCategory.repair, "description": "Unscheduled repair", "default_interval_days": None},
-    ],
-}
+DUE_DATE_OFFSETS = [-5, -1, 0, 1, 2, 3, 5, 7, 10, 14, 20, 30]
 
-# Due-date offsets (days from today), cycled across the non-repair task
-# types, to spread seeded instances across overdue / due-soon / comfortably
-# pending -- so all three status colors have something to show once the
-# frontend is built. Falls back to "due today" if TASK_TYPES grows past
-# this list's length.
-DUE_DATE_OFFSETS = [-5, -1, 0, 1, 2, 3, 5, 7, 10, 14, 20]
+
+def templates_for_machine(name: str) -> list[PmTemplate]:
+    if name == "Corrugation Machine":
+        return CORRUGATION
+    if name == "ETP and STP":
+        return ETP
+    return GENERIC
 
 
 def run_seed() -> None:
     db = SessionLocal()
     try:
         print("Wiping existing data...")
-        # Deletion order matters: task_instances/repair_logs/part_replacements
-        # hold RESTRICT FKs to users, so they must go before users. Bulk
-        # .delete() issues plain SQL DELETEs -- no ORM cascade surprises.
+        db.query(ChecklistItemResult).delete()
+        db.query(HandoverNote).delete()
         db.query(TaskInstance).delete()
         db.query(RepairLog).delete()
         db.query(PartReplacement).delete()
+        db.query(ChecklistItem).delete()
         db.query(TaskType).delete()
         db.query(Machine).delete()
         db.query(User).delete()
@@ -141,38 +107,48 @@ def run_seed() -> None:
         operators = [u for u in users_by_name.values() if u.role == UserRole.operator]
         supervisors = [u for u in users_by_name.values() if u.role == UserRole.supervisor]
 
-        print("Creating machines...")
+        print("Creating machines, PM task types, and checklist items...")
         machines_by_name: dict[str, Machine] = {}
+        offsets = iter(DUE_DATE_OFFSETS)
+        seeded_instances = 0
+        seeded_task_types = 0
+        seeded_items = 0
         for m in MACHINES:
             machine = Machine(**m)
             db.add(machine)
+            db.flush()
             machines_by_name[m["name"]] = machine
-        db.flush()
-
-        print("Creating task types and task instances...")
-        offsets = iter(DUE_DATE_OFFSETS)
-        seeded_instances: list[TaskInstance] = []
-        for machine_name, task_types in TASK_TYPES.items():
-            machine = machines_by_name[machine_name]
-            for tt in task_types:
-                task_type = TaskType(machine_id=machine.id, **tt)
+            for template in templates_for_machine(m["name"]):
+                task_type = TaskType(
+                    machine_id=machine.id,
+                    category=TaskCategory.preventive,
+                    description=template["description"],
+                    default_interval_days=template["default_interval_days"],
+                )
                 db.add(task_type)
                 db.flush()
-                if tt["default_interval_days"] is not None:
-                    due_date = today_local() + timedelta(days=next(offsets, 0))
-                    instance = TaskInstance(task_type_id=task_type.id, due_date=due_date)
-                    db.add(instance)
-                    seeded_instances.append(instance)
-        db.flush()
-
-        print("Marking one task instance done, to demonstrate the recurring chain...")
-        complete_task_instance(
-            db, seeded_instances[0], completed_by=operators[0].id, notes="Seed data: completed for demo"
-        )
+                seeded_task_types += 1
+                for sort_order, spec in enumerate(template["items"]):
+                    db.add(
+                        ChecklistItem(
+                            task_type_id=task_type.id,
+                            section=spec["section"],
+                            sort_order=sort_order,
+                            description=spec["description"],
+                            requires_value=spec["requires_value"],
+                            value_unit=spec["value_unit"] or None,
+                            min_value=spec.get("min_value"),
+                            max_value=spec.get("max_value"),
+                        )
+                    )
+                    seeded_items += 1
+                due_date = today_local() + timedelta(days=next(offsets, 0))
+                db.add(TaskInstance(task_type_id=task_type.id, due_date=due_date))
+                seeded_instances += 1
 
         print("Creating repair logs...")
-        corrugator = machines_by_name["Corrugator 1"]
-        printer = machines_by_name["Flexo Printer 1"]
+        corrugator = machines_by_name["Corrugation Machine"]
+        printer = machines_by_name["Lead Edge Printing"]
         db.add(
             RepairLog(
                 machine_id=corrugator.id,
@@ -204,10 +180,10 @@ def run_seed() -> None:
         )
 
         db.commit()
-        total_task_types = sum(len(v) for v in TASK_TYPES.values())
         print(
             f"Seeded {len(MACHINES)} machines, {len(USERS)} users, "
-            f"{total_task_types} task types, {len(seeded_instances)} task instances."
+            f"{seeded_task_types} task types, {seeded_items} checklist items, "
+            f"{seeded_instances} task instances."
         )
     finally:
         db.close()

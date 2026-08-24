@@ -6,13 +6,14 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
-from app.models import Machine, TaskCategory, TaskType, UserRole
+from app.models import ChecklistItem, Machine, TaskCategory, TaskType, UserRole
+from app.schemas.checklists import ChecklistItemPublic
 from app.schemas.task_types import TaskTypeCreate, TaskTypePublic, TaskTypeUpdate
 
 router = APIRouter(prefix="/task-types", tags=["task_types"])
 
-# Management is explicitly read-only (architecture.md); only supervisor writes.
-_write_roles = require_roles(UserRole.supervisor)
+# Management is explicitly read-only (architecture.md); supervisor+admin write.
+_write_roles = require_roles(UserRole.supervisor, UserRole.admin)
 
 
 @router.get("", response_model=list[TaskTypePublic])
@@ -32,6 +33,19 @@ def get_task_type(
     task_type_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(get_current_user)
 ) -> TaskType:
     return get_or_404(db, TaskType, task_type_id, "Task type not found")
+
+
+@router.get("/{task_type_id}/checklist-items", response_model=list[ChecklistItemPublic])
+def list_checklist_items(
+    task_type_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(get_current_user)
+) -> list[ChecklistItem]:
+    get_or_404(db, TaskType, task_type_id, "Task type not found")
+    return (
+        db.query(ChecklistItem)
+        .filter(ChecklistItem.task_type_id == task_type_id)
+        .order_by(ChecklistItem.sort_order)
+        .all()
+    )
 
 
 @router.post("", response_model=TaskTypePublic, status_code=201)

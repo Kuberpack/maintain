@@ -15,10 +15,10 @@ from app.schemas.part_replacements import (
 
 router = APIRouter(prefix="/part-replacements", tags=["part_replacements"])
 
-# Logging a replacement is operator+supervisor (floor-level); editing/deleting
-# a record is supervisor only; management is read-only.
-_report_roles = require_roles(UserRole.operator, UserRole.supervisor)
-_write_roles = require_roles(UserRole.supervisor)
+# Logging a replacement is operator+supervisor+admin (floor-level);
+# editing/deleting a record is supervisor+admin; management is read-only.
+_report_roles = require_roles(UserRole.operator, UserRole.supervisor, UserRole.admin)
+_write_roles = require_roles(UserRole.supervisor, UserRole.admin)
 
 
 @router.get("", response_model=list[PartReplacementPublic])

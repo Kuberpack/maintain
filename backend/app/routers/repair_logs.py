@@ -12,10 +12,10 @@ from app.schemas.repair_logs import RepairLogCreate, RepairLogPublic, RepairLogR
 
 router = APIRouter(prefix="/repair-logs", tags=["repair_logs"])
 
-# Reporting an issue is operator+supervisor (floor-level); resolving it is
-# supervisor only; management is read-only.
-_report_roles = require_roles(UserRole.operator, UserRole.supervisor)
-_resolve_roles = require_roles(UserRole.supervisor)
+# Reporting an issue is operator+supervisor+admin (floor-level); resolving
+# it is supervisor+admin; management is read-only.
+_report_roles = require_roles(UserRole.operator, UserRole.supervisor, UserRole.admin)
+_resolve_roles = require_roles(UserRole.supervisor, UserRole.admin)
 
 
 @router.get("", response_model=list[RepairLogPublic])
@@ -46,11 +46,14 @@ def create_repair_log(
     db: Session = Depends(get_db),
     current_user: User = Depends(_report_roles),
 ) -> RepairLog:
-    get_or_404(db, Machine, payload.machine_id, "Machine not found")
+    machine = get_or_404(db, Machine, payload.machine_id, "Machine not found")
     repair_log = RepairLog(**payload.model_dump(), reported_by=current_user.id)
     db.add(repair_log)
     db.commit()
     db.refresh(repair_log)
+    from app.services.notifications import notify_new_repair
+
+    notify_new_repair(db, machine.name, repair_log.issue_description)
     return repair_log
 
 

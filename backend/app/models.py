@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -15,6 +15,7 @@ class UserRole(str, enum.Enum):
     operator = "operator"
     supervisor = "supervisor"
     management = "management"
+    admin = "admin"
 
 
 class TaskCategory(str, enum.Enum):
@@ -22,12 +23,46 @@ class TaskCategory(str, enum.Enum):
     oiling = "oiling"
     part_replacement = "part_replacement"
     repair = "repair"
+    preventive = "preventive"
 
 
 class TaskStatus(str, enum.Enum):
     pending = "pending"
     done = "done"
     overdue = "overdue"
+
+
+class ChecklistItemStatus(str, enum.Enum):
+    ok = "ok"
+    attention = "attention"
+    critical = "critical"
+    planned = "planned"
+
+
+class ReviewStatus(str, enum.Enum):
+    none = "none"
+    awaiting_review = "awaiting_review"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class ExceptionLevel(str, enum.Enum):
+    none = "none"
+    attention = "attention"
+    critical = "critical"
+
+
+class ReviewStatus(str, enum.Enum):
+    none = "none"
+    awaiting_review = "awaiting_review"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class ExceptionLevel(str, enum.Enum):
+    none = "none"
+    attention = "attention"
+    critical = "critical"
 
 
 class User(Base):
@@ -62,6 +97,9 @@ class User(Base):
     rescheduled_task_instances: Mapped[list["TaskInstance"]] = relationship(
         foreign_keys="TaskInstance.rescheduled_by", back_populates="rescheduled_by_user", passive_deletes=True
     )
+    reviewed_task_instances: Mapped[list["TaskInstance"]] = relationship(
+        foreign_keys="TaskInstance.reviewed_by", back_populates="reviewed_by_user", passive_deletes=True
+    )
     part_replacements: Mapped[list["PartReplacement"]] = relationship(
         foreign_keys="PartReplacement.replaced_by", back_populates="replaced_by_user", passive_deletes=True
     )
@@ -70,6 +108,15 @@ class User(Base):
     )
     resolved_repair_logs: Mapped[list["RepairLog"]] = relationship(
         foreign_keys="RepairLog.resolved_by", back_populates="resolved_by_user", passive_deletes=True
+    )
+    handover_notes: Mapped[list["HandoverNote"]] = relationship(
+        foreign_keys="HandoverNote.created_by", back_populates="created_by_user", passive_deletes=True
+    )
+    reviewed_task_instances: Mapped[list["TaskInstance"]] = relationship(
+        foreign_keys="TaskInstance.reviewed_by", back_populates="reviewed_by_user", passive_deletes=True
+    )
+    handover_notes: Mapped[list["HandoverNote"]] = relationship(
+        foreign_keys="HandoverNote.created_by", back_populates="created_by_user", passive_deletes=True
     )
 
 
@@ -87,6 +134,10 @@ class Machine(Base):
         back_populates="machine", cascade="all, delete-orphan"
     )
     repair_logs: Mapped[list["RepairLog"]] = relationship(back_populates="machine", cascade="all, delete-orphan")
+    handover_notes: Mapped[list["HandoverNote"]] = relationship(back_populates="machine", cascade="all, delete-orphan")
+    handover_notes: Mapped[list["HandoverNote"]] = relationship(
+        back_populates="machine", cascade="all, delete-orphan"
+    )
 
 
 class TaskType(Base):
@@ -105,6 +156,9 @@ class TaskType(Base):
     task_instances: Mapped[list["TaskInstance"]] = relationship(
         back_populates="task_type", cascade="all, delete-orphan"
     )
+    checklist_items: Mapped[list["ChecklistItem"]] = relationship(
+        back_populates="task_type", cascade="all, delete-orphan", order_by="ChecklistItem.sort_order"
+    )
 
 
 class TaskInstance(Base):
@@ -122,9 +176,24 @@ class TaskInstance(Base):
     completed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     notes: Mapped[str | None] = mapped_column(Text)
     rescheduled_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    # Camera-capture proof of completion. Column exists now per schema.md; the upload flow
-    # isn't wired up until the mark-as-done step is built.
     photo_url: Mapped[str | None] = mapped_column(String(500))
+    exception_photo_url: Mapped[str | None] = mapped_column(String(500))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    is_fast_submit: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    review_status: Mapped[ReviewStatus] = mapped_column(
+        SAEnum(ReviewStatus, name="review_status"),
+        default=ReviewStatus.none,
+        server_default=ReviewStatus.none.value,
+    )
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_notes: Mapped[str | None] = mapped_column(Text)
+    exception_level: Mapped[ExceptionLevel] = mapped_column(
+        SAEnum(ExceptionLevel, name="exception_level"),
+        default=ExceptionLevel.none,
+        server_default=ExceptionLevel.none.value,
+    )
 
     task_type: Mapped["TaskType"] = relationship(back_populates="task_instances")
     completed_by_user: Mapped["User | None"] = relationship(
@@ -133,6 +202,54 @@ class TaskInstance(Base):
     rescheduled_by_user: Mapped["User | None"] = relationship(
         foreign_keys=[rescheduled_by], back_populates="rescheduled_task_instances"
     )
+    reviewed_by_user: Mapped["User | None"] = relationship(
+        foreign_keys=[reviewed_by], back_populates="reviewed_task_instances"
+    )
+    checklist_item_results: Mapped[list["ChecklistItemResult"]] = relationship(
+        back_populates="task_instance", cascade="all, delete-orphan"
+    )
+
+
+class ChecklistItem(Base):
+    __tablename__ = "checklist_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("task_types.id", ondelete="CASCADE")
+    )
+    section: Mapped[str] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(Integer)
+    description: Mapped[str] = mapped_column(Text)
+    requires_value: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    value_unit: Mapped[str | None] = mapped_column(String(50))
+    min_value: Mapped[float | None] = mapped_column(Float)
+    max_value: Mapped[float | None] = mapped_column(Float)
+
+    task_type: Mapped["TaskType"] = relationship(back_populates="checklist_items")
+    results: Mapped[list["ChecklistItemResult"]] = relationship(
+        back_populates="checklist_item", cascade="all, delete-orphan"
+    )
+
+
+class ChecklistItemResult(Base):
+    __tablename__ = "checklist_item_results"
+    __table_args__ = (UniqueConstraint("task_instance_id", "checklist_item_id", name="uq_checklist_result_instance_item"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_instance_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("task_instances.id", ondelete="CASCADE")
+    )
+    checklist_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("checklist_items.id", ondelete="CASCADE")
+    )
+    item_status: Mapped[ChecklistItemStatus] = mapped_column(
+        SAEnum(ChecklistItemStatus, name="checklist_item_status")
+    )
+    numeric_value: Mapped[float | None] = mapped_column(Float)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    task_instance: Mapped["TaskInstance"] = relationship(back_populates="checklist_item_results")
+    checklist_item: Mapped["ChecklistItem"] = relationship(back_populates="results")
 
 
 class PartReplacement(Base):
@@ -174,4 +291,21 @@ class RepairLog(Base):
     )
     resolved_by_user: Mapped["User | None"] = relationship(
         foreign_keys=[resolved_by], back_populates="resolved_repair_logs"
+    )
+
+
+class HandoverNote(Base):
+    __tablename__ = "handover_notes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    machine_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("machines.id", ondelete="CASCADE")
+    )
+    note: Mapped[str] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    machine: Mapped["Machine"] = relationship(back_populates="handover_notes")
+    created_by_user: Mapped["User | None"] = relationship(
+        foreign_keys=[created_by], back_populates="handover_notes"
     )

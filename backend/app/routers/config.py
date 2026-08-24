@@ -13,4 +13,5 @@ def get_public_config(_user=Depends(get_current_user)) -> PublicConfig:
     return PublicConfig(
         alert_upcoming_days=settings.alert_upcoming_days,
         alert_overdue_escalate_days=settings.alert_overdue_escalate_days,
+        alert_unreviewed_hours=settings.alert_unreviewed_hours,
     )

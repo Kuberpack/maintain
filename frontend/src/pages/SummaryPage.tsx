@@ -3,7 +3,7 @@ import { listMachines } from '../api/machines'
 import { listTaskTypes } from '../api/taskTypes'
 import { listTaskInstances } from '../api/taskInstances'
 import { getPublicConfig } from '../api/config'
-import { computeDisplayStatus } from '../lib/status'
+import { computeDisplayStatus, isOpenWork } from '../lib/status'
 import type { DisplayStatus } from '../lib/status'
 
 export function SummaryPage() {
@@ -26,18 +26,19 @@ export function SummaryPage() {
 
   const taskTypeToMachine = new Map(taskTypeList.map((tt) => [tt.id, tt.machineId]))
 
-  const activeInstances = taskInstanceList.filter((ti) => ti.status !== 'done')
-  const withStatus = activeInstances.map((ti) => ({
+  const openInstances = taskInstanceList.filter((ti) => isOpenWork(ti.status, ti.reviewStatus))
+  const awaitingCount = taskInstanceList.filter((ti) => ti.reviewStatus === 'awaiting_review').length
+  const approvedCount = taskInstanceList.filter((ti) => ti.reviewStatus === 'approved').length
+  const withStatus = openInstances.map((ti) => ({
     instance: ti,
-    status: computeDisplayStatus(ti.dueDate, ti.status, cfg.alertUpcomingDays),
+    status: computeDisplayStatus(ti.dueDate, ti.status, cfg.alertUpcomingDays, ti.reviewStatus),
   }))
 
   const overdueCount = withStatus.filter((x) => x.status === 'overdue').length
   const upcomingCount = withStatus.filter((x) => x.status === 'upcoming').length
   const okCount = withStatus.filter((x) => x.status === 'ok').length
-  // Compliance: share of currently-active work that isn't overdue right now.
   const compliancePct =
-    activeInstances.length === 0 ? 100 : Math.round(((activeInstances.length - overdueCount) / activeInstances.length) * 100)
+    openInstances.length === 0 ? 100 : Math.round(((openInstances.length - overdueCount) / openInstances.length) * 100)
 
   const perMachine = machineList.map((machine) => {
     const statuses: DisplayStatus[] = withStatus
@@ -54,12 +55,17 @@ export function SummaryPage() {
   return (
     <div className="mx-auto max-w-5xl p-4">
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Compliance summary</h1>
+      <p className="mb-4 text-sm text-slate-500">
+        Compliance counts only work that is still open (not submitted for review, not approved). {approvedCount}{' '}
+        approved this cycle · {awaitingCount} waiting for a supervisor.
+      </p>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatTile label="Compliance" value={`${compliancePct}%`} />
         <StatTile label="Overdue" value={String(overdueCount)} accent="red" />
         <StatTile label="Due soon" value={String(upcomingCount)} accent="amber" />
         <StatTile label="On track" value={String(okCount)} accent="green" />
+        <StatTile label="Waiting review" value={String(awaitingCount)} />
       </div>
 
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Per-machine</h2>

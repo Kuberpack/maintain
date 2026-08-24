@@ -11,6 +11,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Documentation/default only -- the actual listening port is $PORT if the
+# host sets one (Railway and most PaaS platforms assign this dynamically),
+# falling back to 8000 for docker-compose and any other host that doesn't.
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# No --reload here: that's a local-dev convenience (file-watching, paired
+# with docker-compose.yml's bind mount), not something a production image
+# should carry -- see that file's `backend.command` override for local dev.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

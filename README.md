@@ -1,7 +1,8 @@
 # Machine Maintenance & Cleaning Tracker
 
 Internal tool for Kuberpack's Sonipat plant. See `CLAUDE.md`, `architecture.md`,
-`schema.md`, `todo.md` for context, design, and data model.
+`schema.md`, `todo.md` for context, design, and data model. For the real
+online deployment (Vercel + Railway) rather than local dev, see `DEPLOYMENT.md`.
 
 ## Stack
 
@@ -54,20 +55,18 @@ npm run dev
 
 ## Seed data
 
-This project has no real machine/task/staff data yet. `backend/app/seed.py`
-wipes and reseeds the database with realistic dummy data -- 5 machines,
-16 task types across them with varied intervals, 6 users across all three
-roles, plus example task instances, repair logs, and part replacements --
-so the schema and flows can be tested end-to-end:
+`backend/app/seed.py` wipes and reseeds the database with the 18 plant
+machines, preventive-maintenance checklists (full corrugation list plus
+generic templates for the rest), 6 users across all three roles, plus
+example repair logs and part replacements:
 
 ```bash
 cd backend
 .venv/bin/python -m app.seed
 ```
 
-The `MACHINES` / `USERS` / `TASK_TYPES` constants at the top of that file are
-placeholders. Swapping in real data later means editing those constants, not
-rewriting the seeding logic.
+Do not run seed against a database that already has real floor history
+unless you have a backup — it deletes existing machines, tasks, and users.
 
 Dummy login credentials (all `@kuberpack.com` / phone numbers are fake):
 
@@ -79,6 +78,28 @@ Dummy login credentials (all `@kuberpack.com` / phone numbers are fake):
 | Anita Sharma | supervisor | 9812345004 | 4567 | | |
 | Rajesh Verma | supervisor | 9812345005 | 5678 | | |
 | Priya Kapoor | management | | | priya.kapoor@kuberpack.com | ChangeMe123! |
+
+## Bootstrapping real data (no dummy accounts)
+
+For a real deployment, don't run `seed.py` -- it wipes and replaces
+everything with the dummy data above. Instead, create exactly one real
+admin or supervisor account with `backend/app/bootstrap_account.py`, then
+use that account to add real machines, task types, and staff through the
+app itself (machine/task-type creation and user management all require
+being logged in as at least a supervisor, so this one account is what
+unblocks everything else):
+
+```bash
+docker compose exec backend python -m app.bootstrap_account
+```
+
+Prompts for role (`admin` or `supervisor`), name, phone number, and PIN
+(the PIN prompt is hidden, like a password field). Touches nothing else in
+the database -- safe to run against a database that already has real data
+in it, as long as the phone number you give it isn't already taken. See
+`schema.md`/`architecture.md` for the difference between the two roles --
+briefly, `admin` can manage any user account (including other
+supervisors), while `supervisor` can only manage operator accounts.
 
 ## Backups
 

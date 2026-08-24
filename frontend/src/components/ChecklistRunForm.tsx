@@ -4,7 +4,7 @@ import { markTaskInstanceDone } from '../api/taskInstances'
 import { uploadPhoto } from '../api/photos'
 import { ApiError } from '../api/client'
 import { CameraCapture } from './CameraCapture'
-import { hi } from '../lib/i18n'
+import { useLocale } from '../locale/localeContext'
 import type { ChecklistItem, ChecklistItemStatus, TaskInstance } from '../api/types'
 
 interface ChecklistRunFormProps {
@@ -20,13 +20,13 @@ interface Draft {
   notes: string
 }
 
-const CHOICES: { value: ChecklistItemStatus; label: string; className: string }[] = [
-  { value: 'ok', label: hi.ok, className: 'bg-green-600 text-white' },
-  { value: 'attention', label: hi.problem, className: 'bg-amber-500 text-white' },
-  { value: 'critical', label: hi.stop, className: 'bg-red-600 text-white' },
-]
-
 export function ChecklistRunForm({ instance, taskTypeId, onCompleted, onCancel }: ChecklistRunFormProps) {
+  const { t, locale } = useLocale()
+  const choices: { value: ChecklistItemStatus; label: string; className: string }[] = [
+    { value: 'ok', label: t.ok, className: 'bg-green-600 text-white' },
+    { value: 'attention', label: t.problem, className: 'bg-amber-500 text-white' },
+    { value: 'critical', label: t.stop, className: 'bg-red-600 text-white' },
+  ]
   const [items, setItems] = useState<ChecklistItem[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
@@ -92,11 +92,11 @@ export function ChecklistRunForm({ instance, taskTypeId, onCompleted, onCancel }
       }
     }
     if (!photo) {
-      setError(hi.photo)
+      setError(t.photo)
       return
     }
     if (hasException && !exceptionPhoto) {
-      setError(hi.extraPhoto)
+      setError(t.extraPhoto)
       return
     }
     setSubmitting(true)
@@ -142,17 +142,21 @@ export function ChecklistRunForm({ instance, taskTypeId, onCompleted, onCancel }
   return (
     <div className="flex flex-col gap-4">
       <p className="text-lg font-semibold text-slate-800">
-        {hi.progress(Math.min(step + 1, lastStep + 1), lastStep + 1)}
+        {`${Math.min(step + 1, lastStep + 1)} / ${lastStep + 1}`}
       </p>
 
       {item && draft && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="mb-1 text-sm font-medium uppercase tracking-wide text-slate-500">{item.section}</p>
-          <p className="mb-4 text-xl font-semibold text-slate-900">{item.description}</p>
+          <p className="mb-1 text-sm font-medium uppercase tracking-wide text-slate-500">
+            {locale === 'hi' && item.sectionHi ? item.sectionHi : item.section}
+          </p>
+          <p className="mb-4 text-xl font-semibold text-slate-900">
+            {locale === 'hi' && item.descriptionHi ? item.descriptionHi : item.description}
+          </p>
           {item.requiresValue && (
             <label className="mb-4 flex flex-col gap-1 text-base">
               <span className="font-medium text-slate-700">
-                {hi.reading}
+                {t.reading}
                 {item.valueUnit ? ` (${item.valueUnit})` : ''}
                 {item.minValue != null || item.maxValue != null
                   ? ` · ${item.minValue ?? '—'}–${item.maxValue ?? '—'}`
@@ -170,7 +174,7 @@ export function ChecklistRunForm({ instance, taskTypeId, onCompleted, onCancel }
             </label>
           )}
           <div className="flex flex-col gap-2">
-            {CHOICES.map((choice) => (
+            {choices.map((choice) => (
               <button
                 key={choice.value}
                 type="button"
@@ -189,13 +193,13 @@ export function ChecklistRunForm({ instance, taskTypeId, onCompleted, onCancel }
                 draft.itemStatus === 'planned' ? 'bg-sky-600 text-white' : 'border border-slate-200 text-slate-600'
               }`}
             >
-              {hi.later}
+              {t.later}
             </button>
           </div>
           {(draft.itemStatus === 'attention' || draft.itemStatus === 'critical') && (
             <input
               type="text"
-              placeholder={hi.notes}
+              placeholder={t.notes}
               value={draft.notes}
               onChange={(e) => updateDraft(item.id, { notes: e.target.value })}
               className="mt-3 min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base"
@@ -206,18 +210,18 @@ export function ChecklistRunForm({ instance, taskTypeId, onCompleted, onCancel }
 
       {step === photoStep && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="mb-3 text-xl font-semibold text-slate-900">{hi.photo}</p>
-          <CameraCapture photo={photo} onPhotoChange={setPhoto} label={hi.photo} required large />
+          <p className="mb-3 text-xl font-semibold text-slate-900">{t.photo}</p>
+          <CameraCapture photo={photo} onPhotoChange={setPhoto} label={t.photo} required large />
         </div>
       )}
 
       {hasException && step === exceptionStep && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="mb-3 text-xl font-semibold text-slate-900">{hi.extraPhoto}</p>
+          <p className="mb-3 text-xl font-semibold text-slate-900">{t.extraPhoto}</p>
           <CameraCapture
             photo={exceptionPhoto}
             onPhotoChange={setExceptionPhoto}
-            label={hi.extraPhoto}
+            label={t.extraPhoto}
             required
             large
           />
@@ -234,7 +238,7 @@ export function ChecklistRunForm({ instance, taskTypeId, onCompleted, onCancel }
             onClick={() => setStep((s) => s + 1)}
             className="min-h-16 rounded-xl bg-slate-900 text-lg font-semibold text-white disabled:opacity-40"
           >
-            {hi.next}
+            {t.next}
           </button>
         )}
         {step === lastStep && (
@@ -244,7 +248,7 @@ export function ChecklistRunForm({ instance, taskTypeId, onCompleted, onCancel }
             onClick={() => void handleSubmit()}
             className="min-h-16 rounded-xl bg-slate-900 text-lg font-semibold text-white disabled:opacity-40"
           >
-            {submitting ? hi.saving : hi.submit}
+            {submitting ? t.saving : t.submit}
           </button>
         )}
         {step > 0 && (
@@ -253,7 +257,7 @@ export function ChecklistRunForm({ instance, taskTypeId, onCompleted, onCancel }
             onClick={() => setStep((s) => s - 1)}
             className="min-h-12 rounded-xl border border-slate-300 text-base font-medium text-slate-700"
           >
-            {hi.back}
+            {t.back}
           </button>
         )}
         <button type="button" onClick={onCancel} className="min-h-12 text-base text-slate-500">

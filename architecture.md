@@ -14,12 +14,13 @@
 - Backups: `scripts/backup.sh` (pg_dump-based, daily via host cron) still applies as-is to a local docker-compose Postgres. For the Railway-hosted database, backup strategy hasn't been revisited as part of this deployment-config change — check Railway's own backup/snapshot offering for the plan in use, or point `scripts/backup.sh` at the Railway `DATABASE_URL` instead if that's preferred.
 
 ## System Flow
-1. **Operator** logs into shared dashboard PC → sees machine list with status.
+1. **Operator** logs in → sees **Today** for their one assigned machine only.
 2. Operator completes a cleaning/oiling task on the floor → marks it done in the dashboard → system logs date/time/user, resets the next-due date based on the recurring interval.
-3. **Scheduler job** runs daily → checks all task instances → flags upcoming/overdue → triggers email/WhatsApp alerts to relevant roles.
-4. **Supervisor** can manually reschedule a task instance (e.g. machine was idle, breakdown occurred) — overrides the default recurring interval for that instance only.
+3. **Scheduler job** runs daily → checks all task instances → flags upcoming/overdue → alerts the **assigned operator** (and supervisors). Unassigned machines alert supervisors only.
+4. **Supervisor** can manually reschedule a task instance (e.g. machine was idle, breakdown occurred) — overrides the default recurring interval for that instance only. Supervisors can also cover leave by doing work on any machine.
 5. **Management** views a read-only summary dashboard: overall compliance %, overdue counts, per-machine history — no edit access.
 6. All actions (mark done, reschedule, repair logged) are timestamped and attributed to a user for the history/audit trail.
+7. **Language** is a client-side English/Hindi toggle (remembered in the browser). Operators default to Hindi; other roles default to English.
 
 ## Data Flow Diagram (textual)
 ```

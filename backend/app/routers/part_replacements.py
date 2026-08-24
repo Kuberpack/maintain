@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.access import assigned_machine, require_machine_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
@@ -25,10 +26,15 @@ _write_roles = require_roles(UserRole.supervisor, UserRole.admin)
 def list_part_replacements(
     machine_id: uuid.UUID | None = Query(default=None, alias="machineId"),
     db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[PartReplacement]:
     query = db.query(PartReplacement)
-    if machine_id is not None:
+    if current_user.role == UserRole.operator:
+        mine = assigned_machine(db, current_user)
+        if mine is None:
+            return []
+        query = query.filter(PartReplacement.machine_id == mine.id)
+    elif machine_id is not None:
         query = query.filter(PartReplacement.machine_id == machine_id)
     return query.order_by(PartReplacement.replaced_at.desc()).all()
 
@@ -46,6 +52,7 @@ def create_part_replacement(
     db: Session = Depends(get_db),
     current_user: User = Depends(_report_roles),
 ) -> PartReplacement:
+    require_machine_access(db, current_user, payload.machine_id)
     get_or_404(db, Machine, payload.machine_id, "Machine not found")
     part_replacement = PartReplacement(**payload.model_dump(), replaced_by=current_user.id)
     db.add(part_replacement)

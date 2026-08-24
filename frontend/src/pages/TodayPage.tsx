@@ -13,12 +13,13 @@ import { CameraCapture } from '../components/CameraCapture'
 import { markTaskInstanceDone } from '../api/taskInstances'
 import { uploadPhoto } from '../api/photos'
 import { ApiError } from '../api/client'
-import { hi } from '../lib/i18n'
+import { useLocale } from '../locale/localeContext'
 import { useAuth } from '../auth/useAuth'
 import type { TaskInstance } from '../api/types'
 
 export function TodayPage() {
   const { user } = useAuth()
+  const { t } = useLocale()
   const [params] = useSearchParams()
   const focusMachine = params.get('machine')
   const machines = useAsync(() => listMachines(), [])
@@ -71,7 +72,7 @@ export function TodayPage() {
   async function handleSimpleDone(instance: TaskInstance) {
     const photo = photos[instance.id]
     if (!photo) {
-      setError(hi.photo)
+      setError(t.photo)
       return
     }
     setError(null)
@@ -90,13 +91,13 @@ export function TodayPage() {
 
   return (
     <div className="mx-auto max-w-lg p-4 pb-16">
-      <h1 className="mb-1 text-2xl font-bold text-slate-900">{hi.today}</h1>
+      <h1 className="mb-1 text-2xl font-bold text-slate-900">{t.today}</h1>
       <p className="mb-4 text-base text-slate-600">{user?.name}</p>
       {error && <p className="mb-3 text-base text-red-600">{error}</p>}
 
       {openRepairs.length > 0 && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3">
-          <p className="font-semibold text-red-800">{hi.repairOpen}</p>
+          <p className="font-semibold text-red-800">{t.repairOpen}</p>
           <ul className="mt-1 text-sm text-red-700">
             {openRepairs.slice(0, 5).map((log) => (
               <li key={log.id}>{log.issueDescription}</li>
@@ -105,11 +106,11 @@ export function TodayPage() {
         </div>
       )}
 
-      {cards.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-6 text-lg text-slate-600">{hi.nothingToday}</p>}
+      {cards.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-6 text-lg text-slate-600">{t.nothingToday}</p>}
 
-      <Section title={hi.late} items={late} />
-      <Section title={hi.dueToday} items={dueToday} />
-      <Section title={hi.waiting} items={waiting} waiting />
+      <Section title={t.late} items={late} />
+      <Section title={t.dueToday} items={dueToday} />
+      <Section title={t.waiting} items={waiting} waiting />
     </div>
   )
 
@@ -138,11 +139,11 @@ export function TodayPage() {
               </div>
               {ti.reviewStatus === 'rejected' && ti.reviewNotes && (
                 <p className="mb-3 rounded-md bg-orange-50 px-3 py-2 text-base text-orange-900">
-                  {hi.rejectReason}: {ti.reviewNotes}
+                  {t.rejectReason}: {ti.reviewNotes}
                 </p>
               )}
               {isWaiting ? (
-                <p className="text-base text-slate-500">{hi.waiting}</p>
+                <p className="text-base text-slate-500">{t.waiting}</p>
               ) : runningId === ti.id && taskType?.category === 'preventive' ? (
                 <ChecklistRunForm
                   instance={ti}
@@ -159,14 +160,14 @@ export function TodayPage() {
                   onClick={() => setRunningId(ti.id)}
                   className="mt-2 min-h-16 w-full rounded-xl bg-slate-900 text-lg font-semibold text-white"
                 >
-                  {hi.start}
+                  {t.start}
                 </button>
               ) : (
                 <div className="mt-2 flex flex-col gap-2">
                   <CameraCapture
                     photo={photos[ti.id] ?? null}
                     onPhotoChange={(file) => setPhotos((prev) => ({ ...prev, [ti.id]: file }))}
-                    label={hi.photo}
+                    label={t.photo}
                     required
                     large
                   />
@@ -176,13 +177,15 @@ export function TodayPage() {
                     onClick={() => void handleSimpleDone(ti)}
                     className="min-h-16 rounded-xl bg-slate-900 text-lg font-semibold text-white disabled:opacity-50"
                   >
-                    {markingId === ti.id ? hi.saving : hi.submit}
+                    {markingId === ti.id ? t.saving : t.submit}
                   </button>
                 </div>
               )}
-              <Link to={`/machines/${machine?.id ?? ''}`} className="mt-2 inline-block text-sm text-slate-500">
-                Machine details
-              </Link>
+              {user?.role !== 'operator' && (
+                <Link to={`/machines/${machine?.id ?? ''}`} className="mt-2 inline-block text-sm text-slate-500">
+                  {t.machineDetails}
+                </Link>
+              )}
             </li>
           ))}
         </ul>

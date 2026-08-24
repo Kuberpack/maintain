@@ -51,7 +51,6 @@ def run_daily_check(db: Session) -> None:
 
     supervisors = db.query(User).filter(User.role.in_((UserRole.supervisor, UserRole.admin))).all()
     management = db.query(User).filter(User.role == UserRole.management).all()
-    operators = db.query(User).filter(User.role == UserRole.operator).all()
 
     due_today_or_late = [
         ti
@@ -61,18 +60,20 @@ def run_daily_check(db: Session) -> None:
     if due_today_or_late:
         overdue_count = sum(1 for ti in due_today_or_late if (ti.due_date - today).days < 0)
         today_count = len(due_today_or_late) - overdue_count
-        digest = (
-            f"Aaj ka kaam: {today_count} due today, {overdue_count} overdue. "
-            "Open the dashboard and finish leftover checks."
-        )
-        for user in operators:
-            notify_user(user, "Today's machine checks", digest)
         supervisor_digest = (
             f"{today_count} due today, {overdue_count} overdue, "
             f"{len(awaiting)} waiting for review."
         )
         for user in supervisors:
             notify_user(user, "Morning maintenance summary", supervisor_digest)
+        for user, items in _instances_by_operator(due_today_or_late).items():
+            late_n = sum(1 for ti in items if (ti.due_date - today).days < 0)
+            today_n = len(items) - late_n
+            digest = (
+                f"Aaj ka kaam: {today_n} due today, {late_n} overdue. "
+                "Open the dashboard and finish leftover checks."
+            )
+            notify_user(user, "Today's machine checks", digest)
 
     for instance in upcoming:
         message = _describe(instance, today)
@@ -85,7 +86,9 @@ def run_daily_check(db: Session) -> None:
         subject = f"Task overdue — still open, day {days_overdue}"
         message = _describe(instance, today)
         recipients = list(supervisors)
-        recipients.extend(operators)
+        assigned = _operator_for_instance(instance)
+        if assigned is not None:
+            recipients.append(assigned)
         if escalate:
             recipients.extend(management)
         for user in recipients:
@@ -108,6 +111,21 @@ def run_daily_check(db: Session) -> None:
         if hours >= 24:
             for user in management:
                 notify_user(user, "Supervisor has not reviewed work", message)
+
+
+def _operator_for_instance(instance: TaskInstance) -> User | None:
+    machine = instance.task_type.machine
+    return machine.operator
+
+
+def _instances_by_operator(instances: list[TaskInstance]) -> dict[User, list[TaskInstance]]:
+    grouped: dict[User, list[TaskInstance]] = {}
+    for instance in instances:
+        operator = _operator_for_instance(instance)
+        if operator is None:
+            continue
+        grouped.setdefault(operator, []).append(instance)
+    return grouped
 
 
 def _describe(instance: TaskInstance, today: date) -> str:

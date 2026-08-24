@@ -112,11 +112,8 @@ class User(Base):
     handover_notes: Mapped[list["HandoverNote"]] = relationship(
         foreign_keys="HandoverNote.created_by", back_populates="created_by_user", passive_deletes=True
     )
-    reviewed_task_instances: Mapped[list["TaskInstance"]] = relationship(
-        foreign_keys="TaskInstance.reviewed_by", back_populates="reviewed_by_user", passive_deletes=True
-    )
-    handover_notes: Mapped[list["HandoverNote"]] = relationship(
-        foreign_keys="HandoverNote.created_by", back_populates="created_by_user", passive_deletes=True
+    assigned_machine: Mapped["Machine | None"] = relationship(
+        back_populates="operator", uselist=False, foreign_keys="Machine.operator_id"
     )
 
 
@@ -128,16 +125,17 @@ class Machine(Base):
     type: Mapped[str] = mapped_column(String(100))
     location: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    operator_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), unique=True
+    )
 
+    operator: Mapped["User | None"] = relationship(foreign_keys=[operator_id], back_populates="assigned_machine")
     task_types: Mapped[list["TaskType"]] = relationship(back_populates="machine", cascade="all, delete-orphan")
     part_replacements: Mapped[list["PartReplacement"]] = relationship(
         back_populates="machine", cascade="all, delete-orphan"
     )
     repair_logs: Mapped[list["RepairLog"]] = relationship(back_populates="machine", cascade="all, delete-orphan")
     handover_notes: Mapped[list["HandoverNote"]] = relationship(back_populates="machine", cascade="all, delete-orphan")
-    handover_notes: Mapped[list["HandoverNote"]] = relationship(
-        back_populates="machine", cascade="all, delete-orphan"
-    )
 
 
 class TaskType(Base):
@@ -149,6 +147,7 @@ class TaskType(Base):
     )
     category: Mapped[TaskCategory] = mapped_column(SAEnum(TaskCategory, name="task_category"))
     description: Mapped[str] = mapped_column(Text)
+    description_hi: Mapped[str | None] = mapped_column(Text)
     # Null for repair: event-driven, not scheduled.
     default_interval_days: Mapped[int | None] = mapped_column(Integer)
 
@@ -218,8 +217,10 @@ class ChecklistItem(Base):
         UUID(as_uuid=True), ForeignKey("task_types.id", ondelete="CASCADE")
     )
     section: Mapped[str] = mapped_column(String(255))
+    section_hi: Mapped[str | None] = mapped_column(String(255))
     sort_order: Mapped[int] = mapped_column(Integer)
     description: Mapped[str] = mapped_column(Text)
+    description_hi: Mapped[str | None] = mapped_column(Text)
     requires_value: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     value_unit: Mapped[str | None] = mapped_column(String(50))
     min_value: Mapped[float | None] = mapped_column(Float)

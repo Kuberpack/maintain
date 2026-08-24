@@ -8,8 +8,10 @@ class ChecklistItemPublic(CamelModel):
     id: uuid.UUID
     task_type_id: uuid.UUID
     section: str
+    section_hi: str | None = None
     sort_order: int
     description: str
+    description_hi: str | None = None
     requires_value: bool
     value_unit: str | None
     min_value: float | None

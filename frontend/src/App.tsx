@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthProvider'
 import { useAuth } from './auth/useAuth'
+import { LocaleProvider } from './locale/LocaleProvider'
 import { ProtectedRoute, RoleRoute } from './components/ProtectedRoute'
 import { NavBar } from './components/NavBar'
 import { LoginPage } from './pages/LoginPage'
@@ -69,7 +70,9 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <LocaleProvider>
+        <AppRoutes />
+      </LocaleProvider>
     </AuthProvider>
   )
 }

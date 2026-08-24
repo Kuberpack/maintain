@@ -9,10 +9,11 @@ import { computeDisplayStatus, worstStatus } from '../lib/status'
 import { StatusBadge } from '../components/StatusBadge'
 import { CreateMachineForm } from '../components/CreateMachineForm'
 import { useAuth } from '../auth/useAuth'
-import { hi } from '../lib/i18n'
+import { useLocale } from '../locale/localeContext'
 
 export function MachineListPage() {
   const { user } = useAuth()
+  const { t } = useLocale()
   const machines = useAsync(() => listMachines(), [])
   const taskTypes = useAsync(() => listTaskTypes(), [])
   const taskInstances = useAsync(() => listTaskInstances(), [])
@@ -60,7 +61,12 @@ export function MachineListPage() {
                   {machine.type}
                   {machine.location ? ` · ${machine.location}` : ''}
                 </p>
-                {hasRepair && <p className="mt-1 text-sm font-medium text-red-700">{hi.repairOpen}</p>}
+                {hasRepair && <p className="mt-1 text-sm font-medium text-red-700">{t.repairOpen}</p>}
+                <p className={`mt-1 text-sm ${machine.operator ? 'text-slate-600' : 'font-medium text-amber-700'}`}>
+                  {machine.operator
+                    ? `${t.assignedOperator}: ${machine.operator.name}`
+                    : t.noOperator}
+                </p>
               </div>
               <StatusBadge status={status} />
             </Link>

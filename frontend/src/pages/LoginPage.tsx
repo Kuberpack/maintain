@@ -2,12 +2,14 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { useLocale } from '../locale/localeContext'
 import { ApiError } from '../api/client'
 
 type Mode = 'pin' | 'password'
 
 export function LoginPage() {
   const { user, loginPin, loginPassword } = useAuth()
+  const { t, locale, setLocale } = useLocale()
   const [mode, setMode] = useState<Mode>('pin')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [pin, setPin] = useState('')
@@ -40,6 +42,16 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex justify-end">
+          <div className="flex rounded-md border border-slate-300 text-xs font-medium">
+            <button type="button" onClick={() => setLocale('en')} className={`px-2 py-1 ${locale === 'en' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>
+              {t.languageEn}
+            </button>
+            <button type="button" onClick={() => setLocale('hi')} className={`px-2 py-1 ${locale === 'hi' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>
+              {t.languageHi}
+            </button>
+          </div>
+        </div>
         <h1 className="mb-1 text-lg font-semibold text-slate-900">Machine Maintenance Tracker</h1>
         <p className="mb-6 text-sm text-slate-500">Kuberpack — Sonipat plant</p>
 
@@ -49,14 +61,14 @@ export function LoginPage() {
             onClick={() => setMode('pin')}
             className={`flex-1 rounded px-3 py-1.5 font-medium ${mode === 'pin' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}
           >
-            Phone + PIN
+            {t.phonePin}
           </button>
           <button
             type="button"
             onClick={() => setMode('password')}
             className={`flex-1 rounded px-3 py-1.5 font-medium ${mode === 'password' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}
           >
-            Email + Password
+            {t.emailPassword}
           </button>
         </div>
 
@@ -64,7 +76,7 @@ export function LoginPage() {
           {mode === 'pin' ? (
             <>
               <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-slate-700">Phone number</span>
+                <span className="font-medium text-slate-700">{t.phone}</span>
                 <input
                   type="tel"
                   inputMode="numeric"
@@ -76,7 +88,7 @@ export function LoginPage() {
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-slate-700">PIN</span>
+                <span className="font-medium text-slate-700">{t.pin}</span>
                 <input
                   type="password"
                   inputMode="numeric"
@@ -92,7 +104,7 @@ export function LoginPage() {
           ) : (
             <>
               <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-slate-700">Email</span>
+                <span className="font-medium text-slate-700">{t.email}</span>
                 <input
                   type="email"
                   required
@@ -103,7 +115,7 @@ export function LoginPage() {
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-slate-700">Password</span>
+                <span className="font-medium text-slate-700">{t.password}</span>
                 <input
                   type="password"
                   required
@@ -123,7 +135,7 @@ export function LoginPage() {
             disabled={submitting}
             className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
           >
-            {submitting ? 'Signing in…' : 'Sign in'}
+            {submitting ? t.saving : t.signIn}
           </button>
         </form>
       </div>

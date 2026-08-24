@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { createMachine } from '../api/machines'
+import { listUsers } from '../api/users'
+import { listMachines } from '../api/machines'
 import { ApiError } from '../api/client'
+import { useAsync } from '../lib/useAsync'
 
 interface CreateMachineFormProps {
   onCreated: () => void
@@ -12,13 +15,17 @@ export function CreateMachineForm({ onCreated }: CreateMachineFormProps) {
   const [name, setName] = useState('')
   const [type, setType] = useState('')
   const [location, setLocation] = useState('')
+  const [operatorId, setOperatorId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const users = useAsync(() => listUsers(), [])
+  const machines = useAsync(() => listMachines(), [])
 
   function reset() {
     setName('')
     setType('')
     setLocation('')
+    setOperatorId('')
     setError(null)
   }
 
@@ -27,7 +34,12 @@ export function CreateMachineForm({ onCreated }: CreateMachineFormProps) {
     setError(null)
     setSubmitting(true)
     try {
-      await createMachine({ name, type, location: location || undefined })
+      await createMachine({
+        name,
+        type,
+        location: location || undefined,
+        operatorId: operatorId || null,
+      })
       reset()
       setOpen(false)
       onCreated()
@@ -84,6 +96,24 @@ export function CreateMachineForm({ onCreated }: CreateMachineFormProps) {
           placeholder="e.g. Bay A"
           className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
         />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium text-slate-700">Operator (optional)</span>
+        <select
+          value={operatorId}
+          onChange={(e) => setOperatorId(e.target.value)}
+          className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
+        >
+          <option value="">Unassigned</option>
+          {(users.data ?? [])
+            .filter((u) => u.role === 'operator')
+            .filter((u) => !(machines.data ?? []).some((m) => m.operatorId === u.id))
+            .map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+        </select>
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2">

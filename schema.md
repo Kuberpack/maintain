@@ -19,6 +19,7 @@ Draft only — subject to change once Phase 1 begins.
 | name | text | e.g. "Corrugator 1" |
 | type | text | e.g. corrugator, printer, folder-gluer, laminator, die-cutter |
 | location | text | plant/section |
+| operator_id | uuid, FK → users.id, unique, nullable | dedicated operator for this machine (1:1). SET NULL on user delete. |
 | created_at | timestamptz | |
 
 ## `task_types`
@@ -30,6 +31,7 @@ Defines the recurring task templates per machine.
 | machine_id | uuid, FK → machines.id | |
 | category | enum | cleaning / oiling / part_replacement / repair / preventive |
 | description | text | e.g. "Daily Preventive Maintenance" |
+| description_hi | text | optional Hindi label; UI falls back to description |
 | default_interval_days | int | null for repair (event-driven, not scheduled) |
 
 ## `checklist_items`
@@ -40,8 +42,10 @@ Inspection points on a preventive (or other) task type. Completing a `task_insta
 | id | uuid, PK | |
 | task_type_id | uuid, FK → task_types.id | |
 | section | text | grouping, e.g. "Single Facer" |
+| section_hi | text | optional Hindi section label |
 | sort_order | int | display order |
 | description | text | inspection point |
+| description_hi | text | optional Hindi inspection text |
 | requires_value | bool | if true, a numeric reading is required |
 | value_unit | text | e.g. bar, °C; null when not measured |
 | min_value | float | optional expected minimum; out of range becomes Attention |

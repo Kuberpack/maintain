@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { createHandoverNote } from '../api/handover'
 import { ApiError } from '../api/client'
-import { hi } from '../lib/i18n'
+import { useLocale } from '../locale/localeContext'
 import type { HandoverNote } from '../api/types'
 
 export function HandoverForm({
@@ -14,6 +14,7 @@ export function HandoverForm({
   latest: HandoverNote | null
   onSaved: () => void
 }) {
+  const { t } = useLocale()
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,14 +37,14 @@ export function HandoverForm({
 
   return (
     <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{hi.handover}</h2>
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{t.machineNote}</h2>
       {latest ? (
         <p className="mb-3 text-base text-slate-800">
           {latest.note}
           <span className="mt-1 block text-sm text-slate-500">{new Date(latest.createdAt).toLocaleString()}</span>
         </p>
       ) : (
-        <p className="mb-3 text-sm text-slate-500">No shift note yet.</p>
+        <p className="mb-3 text-sm text-slate-500">{t.noNoteYet}</p>
       )}
       <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-2">
         <textarea
@@ -58,7 +59,7 @@ export function HandoverForm({
           disabled={submitting}
           className="min-h-12 rounded-md bg-slate-900 px-4 text-base font-medium text-white disabled:opacity-50"
         >
-          {submitting ? hi.saving : 'Save shift note'}
+          {submitting ? t.saving : t.saveNote}
         </button>
       </form>
     </section>

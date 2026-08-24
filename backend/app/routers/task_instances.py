@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.access import assigned_machine, require_machine_access, require_task_instance_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
@@ -34,10 +35,17 @@ def list_task_instances(
     status: TaskStatus | None = None,
     review_status: ReviewStatus | None = Query(default=None, alias="reviewStatus"),
     db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[TaskInstance]:
     query = db.query(TaskInstance)
-    if machine_id is not None:
+    if current_user.role == UserRole.operator:
+        mine = assigned_machine(db, current_user)
+        if mine is None:
+            return []
+        query = query.join(TaskType).filter(TaskType.machine_id == mine.id)
+        if machine_id is not None:
+            require_machine_access(db, current_user, machine_id)
+    elif machine_id is not None:
         query = query.join(TaskType).filter(TaskType.machine_id == machine_id)
     if status is not None:
         query = query.filter(TaskInstance.status == status)
@@ -48,16 +56,19 @@ def list_task_instances(
 
 @router.get("/{task_instance_id}", response_model=TaskInstancePublic)
 def get_task_instance(
-    task_instance_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(get_current_user)
+    task_instance_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> TaskInstance:
-    return get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    require_task_instance_access(db, current_user, instance)
+    return instance
 
 
 @router.get("/{task_instance_id}/checklist-results", response_model=list[ChecklistItemResultPublic])
 def list_task_instance_checklist_results(
-    task_instance_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(get_current_user)
+    task_instance_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> list[ChecklistItemResult]:
-    get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    require_task_instance_access(db, current_user, instance)
     return (
         db.query(ChecklistItemResult)
         .filter(ChecklistItemResult.task_instance_id == task_instance_id)
@@ -85,6 +96,7 @@ def mark_task_instance_done(
     current_user: User = Depends(_do_work_roles),
 ) -> TaskInstanceMarkDoneResponse:
     task_instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    require_task_instance_access(db, current_user, task_instance)
     submit_task_instance(
         db,
         task_instance,

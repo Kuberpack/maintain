@@ -3,10 +3,11 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.access import assigned_machine, require_machine_access, require_task_type_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
-from app.models import ChecklistItem, Machine, TaskCategory, TaskType, UserRole
+from app.models import ChecklistItem, Machine, TaskCategory, TaskType, User, UserRole
 from app.schemas.checklists import ChecklistItemPublic
 from app.schemas.task_types import TaskTypeCreate, TaskTypePublic, TaskTypeUpdate
 
@@ -20,26 +21,35 @@ _write_roles = require_roles(UserRole.supervisor, UserRole.admin)
 def list_task_types(
     machine_id: uuid.UUID | None = Query(default=None, alias="machineId"),
     db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[TaskType]:
     query = db.query(TaskType)
+    if current_user.role == UserRole.operator:
+        mine = assigned_machine(db, current_user)
+        if mine is None:
+            return []
+        query = query.filter(TaskType.machine_id == mine.id)
     if machine_id is not None:
+        require_machine_access(db, current_user, machine_id)
         query = query.filter(TaskType.machine_id == machine_id)
     return query.all()
 
 
 @router.get("/{task_type_id}", response_model=TaskTypePublic)
 def get_task_type(
-    task_type_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(get_current_user)
+    task_type_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> TaskType:
-    return get_or_404(db, TaskType, task_type_id, "Task type not found")
+    task_type = get_or_404(db, TaskType, task_type_id, "Task type not found")
+    require_task_type_access(db, current_user, task_type)
+    return task_type
 
 
 @router.get("/{task_type_id}/checklist-items", response_model=list[ChecklistItemPublic])
 def list_checklist_items(
-    task_type_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(get_current_user)
+    task_type_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> list[ChecklistItem]:
-    get_or_404(db, TaskType, task_type_id, "Task type not found")
+    task_type = get_or_404(db, TaskType, task_type_id, "Task type not found")
+    require_task_type_access(db, current_user, task_type)
     return (
         db.query(ChecklistItem)
         .filter(ChecklistItem.task_type_id == task_type_id)

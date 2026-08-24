@@ -17,6 +17,8 @@ from app.models import (
     TaskCategory,
     TaskInstance,
     TaskType,
+    User,
+    UserRole,
 )
 from app.seed import DUE_DATE_OFFSETS, MACHINES, templates_for_machine
 
@@ -39,8 +41,13 @@ def run() -> None:
         seeded_task_types = 0
         seeded_items = 0
         seeded_instances = 0
+        operators = db.query(User).filter(User.role == UserRole.operator).order_by(User.name).all()
+        assigned = 0
         for m in MACHINES:
             machine = Machine(**m)
+            if assigned < len(operators):
+                machine.operator_id = operators[assigned].id
+                assigned += 1
             db.add(machine)
             db.flush()
             for template in templates_for_machine(m["name"]):

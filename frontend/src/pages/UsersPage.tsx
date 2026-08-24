@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAsync } from '../lib/useAsync'
 import { listUsers, deleteUser } from '../api/users'
+import { listMachines } from '../api/machines'
 import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
 import { CreateUserForm } from '../components/CreateUserForm'
@@ -23,6 +24,7 @@ export function UsersPage() {
   const allowedRoles: UserRole[] = currentUser?.role === 'admin' ? ALL_ROLES : ['operator']
 
   const users = useAsync(() => (canView ? listUsers() : Promise.resolve([])), [canView])
+  const machines = useAsync(() => (canView ? listMachines() : Promise.resolve([])), [canView])
 
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -114,6 +116,11 @@ export function UsersPage() {
                   <p className="text-sm text-slate-500">
                     {u.role} · {u.role === 'management' ? (u.email ?? '—') : (u.phoneNumber ?? '—')}
                     {u.whatsappNumber ? ` · WA ${u.whatsappNumber}` : ''}
+                    {u.role === 'operator'
+                      ? ` · ${
+                          machines.data?.find((m) => m.operatorId === u.id)?.name ?? 'unassigned'
+                        }`
+                      : ''}
                   </p>
                 </div>
                 {canManageRow(u) && (

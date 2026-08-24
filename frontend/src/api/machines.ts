@@ -9,7 +9,12 @@ export function getMachine(id: string): Promise<Machine> {
   return apiFetch<Machine>(`/machines/${id}`)
 }
 
-export function createMachine(payload: { name: string; type: string; location?: string }): Promise<Machine> {
+export function createMachine(payload: {
+  name: string
+  type: string
+  location?: string
+  operatorId?: string | null
+}): Promise<Machine> {
   return apiFetch<Machine>('/machines', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -18,7 +23,7 @@ export function createMachine(payload: { name: string; type: string; location?: 
 
 export function updateMachine(
   id: string,
-  payload: { name: string; type: string; location?: string },
+  payload: { name: string; type: string; location?: string; operatorId?: string | null },
 ): Promise<Machine> {
   return apiFetch<Machine>(`/machines/${id}`, {
     method: 'PATCH',

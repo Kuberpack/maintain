@@ -10,6 +10,7 @@ class TaskTypeCreate(CamelModel):
     machine_id: uuid.UUID
     category: TaskCategory
     description: str = Field(min_length=1)
+    description_hi: str | None = None
     default_interval_days: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
@@ -27,6 +28,7 @@ class TaskTypeCreate(CamelModel):
 class TaskTypeUpdate(CamelModel):
     category: TaskCategory | None = None
     description: str | None = Field(default=None, min_length=1)
+    description_hi: str | None = None
     default_interval_days: int | None = Field(default=None, gt=0)
     # Category/interval consistency is re-checked in the router after merging
     # with the existing row, since a PATCH may only touch one of the two.
@@ -37,4 +39,5 @@ class TaskTypePublic(CamelModel):
     machine_id: uuid.UUID
     category: TaskCategory
     description: str
+    description_hi: str | None = None
     default_interval_days: int | None

@@ -115,6 +115,8 @@ def run_seed() -> None:
         seeded_items = 0
         for m in MACHINES:
             machine = Machine(**m)
+            if len(machines_by_name) < len(operators):
+                machine.operator_id = operators[len(machines_by_name)].id
             db.add(machine)
             db.flush()
             machines_by_name[m["name"]] = machine

@@ -173,6 +173,9 @@ export function MachineDetailPage() {
             {machineData.type}
             {machineData.location ? ` · ${machineData.location}` : ''}
           </p>
+          <p className={`mt-1 text-sm ${machineData.operator ? 'text-slate-600' : 'font-medium text-amber-700'}`}>
+            {machineData.operator ? `Operator: ${machineData.operator.name}` : 'No operator assigned'}
+          </p>
         </div>
         {canManageSetup && (
           <div className="flex flex-col items-start gap-2 sm:items-end">

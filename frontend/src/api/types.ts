@@ -19,6 +19,8 @@ export interface Machine {
   name: string
   type: string
   location: string | null
+  operatorId: string | null
+  operator: { id: string; name: string } | null
   createdAt: string
 }
 
@@ -27,6 +29,7 @@ export interface TaskType {
   machineId: string
   category: TaskCategory
   description: string
+  descriptionHi: string | null
   defaultIntervalDays: number | null
 }
 
@@ -62,8 +65,10 @@ export interface ChecklistItem {
   id: string
   taskTypeId: string
   section: string
+  sectionHi: string | null
   sortOrder: number
   description: string
+  descriptionHi: string | null
   requiresValue: boolean
   valueUnit: string | null
   minValue: number | null

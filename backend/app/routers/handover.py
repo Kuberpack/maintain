@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.access import assigned_machine, require_machine_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import get_or_404
 from app.database import get_db
@@ -18,10 +19,15 @@ _write_roles = require_roles(UserRole.operator, UserRole.supervisor, UserRole.ad
 def list_handover_notes(
     machine_id: uuid.UUID | None = Query(default=None, alias="machineId"),
     db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[HandoverNote]:
     query = db.query(HandoverNote)
-    if machine_id is not None:
+    if current_user.role == UserRole.operator:
+        mine = assigned_machine(db, current_user)
+        if mine is None:
+            return []
+        query = query.filter(HandoverNote.machine_id == mine.id)
+    elif machine_id is not None:
         query = query.filter(HandoverNote.machine_id == machine_id)
     return query.order_by(HandoverNote.created_at.desc()).limit(50).all()
 
@@ -32,6 +38,7 @@ def create_handover_note(
     db: Session = Depends(get_db),
     current_user: User = Depends(_write_roles),
 ) -> HandoverNote:
+    require_machine_access(db, current_user, payload.machine_id)
     get_or_404(db, Machine, payload.machine_id, "Machine not found")
     note = HandoverNote(machine_id=payload.machine_id, note=payload.note, created_by=current_user.id)
     db.add(note)

@@ -14,13 +14,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
-      // Uploaded photos, served directly by the backend at this same path
-      // (no /api prefix/rewrite -- photoUrl values from the API are used
-      // as-is in <img src>).
-      '/uploads': {
-        target: process.env.VITE_BACKEND_URL ?? 'http://localhost:8000',
-        changeOrigin: true,
-      },
     },
   },
 })

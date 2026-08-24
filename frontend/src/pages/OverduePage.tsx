@@ -29,7 +29,12 @@ export function OverduePage() {
   const taskTypeById = new Map(taskTypeList.map((tt) => [tt.id, tt]))
 
   const overdueInstances = taskInstanceList
-    .filter((ti) => ti.status !== 'done' && computeDisplayStatus(ti.dueDate, ti.status, cfg.alertUpcomingDays) === 'overdue')
+    .filter(
+      (ti) =>
+        ti.status !== 'done' &&
+        ti.reviewStatus !== 'awaiting_review' &&
+        computeDisplayStatus(ti.dueDate, ti.status, cfg.alertUpcomingDays, ti.reviewStatus) === 'overdue',
+    )
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
 
   return (

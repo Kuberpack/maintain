@@ -15,6 +15,7 @@ from app.database import SessionLocal
 from app.models import (
     ChecklistItem,
     ChecklistItemResult,
+    HandoverNote,
     Machine,
     PartReplacement,
     RepairLog,
@@ -77,6 +78,7 @@ def run_seed() -> None:
     try:
         print("Wiping existing data...")
         db.query(ChecklistItemResult).delete()
+        db.query(HandoverNote).delete()
         db.query(TaskInstance).delete()
         db.query(RepairLog).delete()
         db.query(PartReplacement).delete()
@@ -135,6 +137,8 @@ def run_seed() -> None:
                             description=spec["description"],
                             requires_value=spec["requires_value"],
                             value_unit=spec["value_unit"] or None,
+                            min_value=spec.get("min_value"),
+                            max_value=spec.get("max_value"),
                         )
                     )
                     seeded_items += 1

@@ -3,21 +3,24 @@ import { useAsync } from '../lib/useAsync'
 import { listMachines } from '../api/machines'
 import { listTaskTypes } from '../api/taskTypes'
 import { listTaskInstances } from '../api/taskInstances'
+import { listRepairLogs } from '../api/repairLogs'
 import { getPublicConfig } from '../api/config'
 import { computeDisplayStatus, worstStatus } from '../lib/status'
 import { StatusBadge } from '../components/StatusBadge'
 import { CreateMachineForm } from '../components/CreateMachineForm'
 import { useAuth } from '../auth/useAuth'
+import { hi } from '../lib/i18n'
 
 export function MachineListPage() {
   const { user } = useAuth()
   const machines = useAsync(() => listMachines(), [])
   const taskTypes = useAsync(() => listTaskTypes(), [])
   const taskInstances = useAsync(() => listTaskInstances(), [])
+  const repairs = useAsync(() => listRepairLogs({ unresolvedOnly: true }), [])
   const config = useAsync(() => getPublicConfig(), [])
 
-  const loading = machines.loading || taskTypes.loading || taskInstances.loading || config.loading
-  const error = machines.error ?? taskTypes.error ?? taskInstances.error ?? config.error
+  const loading = machines.loading || taskTypes.loading || taskInstances.loading || repairs.loading || config.loading
+  const error = machines.error ?? taskTypes.error ?? taskInstances.error ?? repairs.error ?? config.error
 
   if (loading) return <p className="p-6 text-slate-500">Loading machines…</p>
   if (error) return <p className="p-6 text-red-600">{error}</p>
@@ -27,6 +30,7 @@ export function MachineListPage() {
   const taskTypeList = taskTypes.data
   const taskInstanceList = taskInstances.data
   const cfg = config.data
+  const openRepairIds = new Set((repairs.data ?? []).map((r) => r.machineId))
 
   const taskTypeToMachine = new Map(taskTypeList.map((tt) => [tt.id, tt.machineId]))
 
@@ -40,8 +44,9 @@ export function MachineListPage() {
         {machineList.map((machine) => {
           const activeStatuses = taskInstanceList
             .filter((ti) => taskTypeToMachine.get(ti.taskTypeId) === machine.id && ti.status !== 'done')
-            .map((ti) => computeDisplayStatus(ti.dueDate, ti.status, cfg.alertUpcomingDays))
+            .map((ti) => computeDisplayStatus(ti.dueDate, ti.status, cfg.alertUpcomingDays, ti.reviewStatus))
           const status = worstStatus(activeStatuses)
+          const hasRepair = openRepairIds.has(machine.id)
 
           return (
             <Link
@@ -55,6 +60,7 @@ export function MachineListPage() {
                   {machine.type}
                   {machine.location ? ` · ${machine.location}` : ''}
                 </p>
+                {hasRepair && <p className="mt-1 text-sm font-medium text-red-700">{hi.repairOpen}</p>}
               </div>
               <StatusBadge status={status} />
             </Link>

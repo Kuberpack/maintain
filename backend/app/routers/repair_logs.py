@@ -46,11 +46,14 @@ def create_repair_log(
     db: Session = Depends(get_db),
     current_user: User = Depends(_report_roles),
 ) -> RepairLog:
-    get_or_404(db, Machine, payload.machine_id, "Machine not found")
+    machine = get_or_404(db, Machine, payload.machine_id, "Machine not found")
     repair_log = RepairLog(**payload.model_dump(), reported_by=current_user.id)
     db.add(repair_log)
     db.commit()
     db.refresh(repair_log)
+    from app.services.notifications import notify_new_repair
+
+    notify_new_repair(db, machine.name, repair_log.issue_description)
     return repair_log
 
 

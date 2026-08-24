@@ -44,6 +44,8 @@ Inspection points on a preventive (or other) task type. Completing a `task_insta
 | description | text | inspection point |
 | requires_value | bool | if true, a numeric reading is required |
 | value_unit | text | e.g. bar, °C; null when not measured |
+| min_value | float | optional expected minimum; out of range becomes Attention |
+| max_value | float | optional expected maximum |
 
 ## `checklist_item_results`
 Per-run status for one inspection point.
@@ -68,11 +70,33 @@ Each scheduled/actual occurrence of a task — this is the log + schedule combin
 | task_type_id | uuid, FK → task_types.id | |
 | due_date | date | computed from last completion + interval, or manually set |
 | status | enum | pending / done / overdue |
-| completed_at | timestamptz | null until done |
-| completed_by | uuid, FK → users.id | null until done |
+| completed_at | timestamptz | operator submit time (null until submitted) |
+| completed_by | uuid, FK → users.id | null until submitted |
 | notes | text | free-text notes on completion |
 | rescheduled_by | uuid, FK → users.id | null unless supervisor manually overrode |
-| photo_url | text | optional, for proof-of-completion (open question) |
+| photo_url | text | required proof photo on submit |
+| exception_photo_url | text | required extra photo if any item is attention/critical |
+| started_at | timestamptz | when the operator opened the checklist |
+| duration_seconds | int | submit minus started_at |
+| is_fast_submit | bool | true if a large checklist was submitted in under 3 minutes |
+| review_status | enum | none / awaiting_review / approved / rejected |
+| reviewed_by | uuid, FK → users.id | supervisor who accepted or rejected |
+| reviewed_at | timestamptz | |
+| review_notes | text | reject reason, shown to the operator |
+| exception_level | enum | none / attention / critical (worst item on the run) |
+
+Work is not `done` until `review_status=approved`. The next recurring instance is created only then.
+
+## `handover_notes`
+Shift note on a machine so the next operator is not blind.
+
+| column | type | notes |
+|---|---|---|
+| id | uuid, PK | |
+| machine_id | uuid, FK → machines.id | |
+| note | text | |
+| created_by | uuid, FK → users.id | |
+| created_at | timestamptz | |
 
 ## `part_replacements`
 | column | type | notes |
@@ -103,4 +127,5 @@ Each scheduled/actual occurrence of a task — this is the log + schedule combin
 - `task_instances` 1—N `checklist_item_results`
 - `machines` 1—N `part_replacements`
 - `machines` 1—N `repair_logs`
-- `users` 1—N `task_instances` (as completer/rescheduler), `part_replacements`, `repair_logs`
+- `machines` 1—N `handover_notes`
+- `users` 1—N `task_instances` (as completer/rescheduler/reviewer), `part_replacements`, `repair_logs`, `handover_notes`

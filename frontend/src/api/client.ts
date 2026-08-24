@@ -25,6 +25,17 @@ export class ApiError extends Error {
   }
 }
 
+export async function fetchAuthenticatedBlob(path: string): Promise<Blob> {
+  const token = localStorage.getItem('authToken')
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    throw new ApiError(`Request to ${path} failed (${response.status})`, response.status)
+  }
+  return response.blob()
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem('authToken')
   // FormData bodies (photo upload) need the browser to set its own

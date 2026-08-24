@@ -1,6 +1,8 @@
+import io
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_roles
@@ -60,3 +62,23 @@ def delete_machine(
     machine = get_or_404(db, Machine, machine_id, "Machine not found")
     db.delete(machine)
     commit_or_409(db, "Cannot delete this machine")
+
+
+@router.get("/{machine_id}/qr")
+def machine_qr(
+    machine_id: uuid.UUID,
+    origin: str = Query(min_length=8),
+    db: Session = Depends(get_db),
+    _user=Depends(get_current_user),
+) -> Response:
+    get_or_404(db, Machine, machine_id, "Machine not found")
+    import qrcode
+
+    target = f"{origin.rstrip('/')}/machines/{machine_id}"
+    qr = qrcode.QRCode(box_size=8, border=2)
+    qr.add_data(target)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")

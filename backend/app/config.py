@@ -33,21 +33,39 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
-    # Alert thresholds, in days. Positive due_in_days = upcoming warning;
-    # negative (days overdue) = escalation. Placeholders until tuned for real usage.
     alert_upcoming_days: int = 3
     alert_overdue_escalate_days: int = 1
+    alert_unreviewed_hours: int = 8
 
     local_timezone: str = "Asia/Kolkata"
-
-    # Local hour (in local_timezone) the daily status-check/alert job runs.
     daily_check_hour: int = 7
 
-    # Local-disk storage for mark-done proof-of-completion photos. Real
-    # cloud storage is an open question (todo.md Phase 5); this is enough
-    # for the current single-server deployment model.
     uploads_dir: str = "uploads"
     max_upload_size_mb: int = 8
+
+    # Optional S3-compatible object storage. If s3_bucket is set, photos go
+    # there instead of local disk (Railway disks are ephemeral).
+    s3_bucket: str | None = None
+    s3_endpoint_url: str | None = None
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    s3_region: str = "auto"
+
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_starttls: bool = True
+
+    # WhatsApp: set twilio_* for Twilio, or whatsapp_api_url + token for a
+    # generic HTTP BSP (Gupshup/Interakt-style). Unset = log-only stub.
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_whatsapp_from: str | None = None
+    whatsapp_api_url: str | None = None
+    whatsapp_api_token: str | None = None
+    whatsapp_from: str | None = None
 
 
 @lru_cache

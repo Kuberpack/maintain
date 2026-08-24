@@ -12,6 +12,8 @@ class ChecklistItemPublic(CamelModel):
     description: str
     requires_value: bool
     value_unit: str | None
+    min_value: float | None
+    max_value: float | None
 
 
 class ChecklistItemResultInput(CamelModel):

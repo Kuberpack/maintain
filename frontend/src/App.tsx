@@ -1,7 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthProvider'
 import { useAuth } from './auth/useAuth'
-import { ProtectedRoute } from './components/ProtectedRoute'
+import { ProtectedRoute, RoleRoute } from './components/ProtectedRoute'
 import { NavBar } from './components/NavBar'
 import { LoginPage } from './pages/LoginPage'
 import { MachineListPage } from './pages/MachineListPage'
@@ -10,6 +10,9 @@ import { OverduePage } from './pages/OverduePage'
 import { SummaryPage } from './pages/SummaryPage'
 import { UsersPage } from './pages/UsersPage'
 import { MyProfilePage } from './pages/MyProfilePage'
+import { TodayPage } from './pages/TodayPage'
+import { ReviewPage } from './pages/ReviewPage'
+import { WeeklyReportPage } from './pages/WeeklyReportPage'
 
 function Layout() {
   return (
@@ -18,6 +21,17 @@ function Layout() {
       <Outlet />
     </div>
   )
+}
+
+function HomePage() {
+  const { user } = useAuth()
+  if (user?.role === 'operator') {
+    return <Navigate to="/today" replace />
+  }
+  if (user?.role === 'management') {
+    return <Navigate to="/summary" replace />
+  }
+  return <MachineListPage />
 }
 
 function AppRoutes() {
@@ -32,12 +46,19 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
-          <Route path="/" element={<MachineListPage />} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/today" element={<TodayPage />} />
           <Route path="/machines/:id" element={<MachineDetailPage />} />
-          <Route path="/overdue" element={<OverduePage />} />
-          <Route path="/summary" element={<SummaryPage />} />
-          <Route path="/users" element={<UsersPage />} />
           <Route path="/profile" element={<MyProfilePage />} />
+          <Route element={<RoleRoute roles={['admin', 'supervisor']} />}>
+            <Route path="/review" element={<ReviewPage />} />
+          </Route>
+          <Route element={<RoleRoute roles={['admin', 'supervisor', 'management']} />}>
+            <Route path="/overdue" element={<OverduePage />} />
+            <Route path="/summary" element={<SummaryPage />} />
+            <Route path="/reports" element={<WeeklyReportPage />} />
+            <Route path="/users" element={<UsersPage />} />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

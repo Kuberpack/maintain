@@ -1,17 +1,14 @@
-import uuid
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi.responses import Response
 
 from app.config import get_settings
-from app.core.deps import require_roles
+from app.core.deps import get_current_user, require_roles
 from app.models import UserRole
 from app.schemas.photos import UploadedPhoto
+from app.services import storage
 
 router = APIRouter(prefix="/photos", tags=["photos"])
 
-# Same roles as who marks tasks done -- this endpoint only exists to back
-# that flow's proof-of-completion photo.
 _upload_roles = require_roles(UserRole.operator, UserRole.supervisor, UserRole.admin)
 
 _EXTENSION_BY_CONTENT_TYPE = {
@@ -36,10 +33,22 @@ async def upload_photo(file: UploadFile, _user=Depends(_upload_roles)) -> Upload
         )
 
     extension = _EXTENSION_BY_CONTENT_TYPE.get(file.content_type, ".jpg")
-    filename = f"{uuid.uuid4()}{extension}"
+    url = storage.save_bytes(content, extension)
+    return UploadedPhoto(url=url)
 
-    uploads_path = Path(settings.uploads_dir)
-    uploads_path.mkdir(parents=True, exist_ok=True)
-    (uploads_path / filename).write_bytes(content)
 
-    return UploadedPhoto(url=f"/uploads/{filename}")
+@router.get("/files/{filename}")
+def get_photo(filename: str, _user=Depends(get_current_user)) -> Response:
+    """Authenticated photo fetch. Replaces the old unauthenticated /uploads mount."""
+    content = storage.read_bytes(filename)
+    if content is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
+    ext = filename.rsplit(".", 1)[-1].lower()
+    media = {
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+        "webp": "image/webp",
+        "heic": "image/heic",
+    }.get(ext, "application/octet-stream")
+    return Response(content=content, media_type=media)

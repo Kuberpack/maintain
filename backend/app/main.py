@@ -39,6 +39,10 @@ app = FastAPI(title="Machine Maintenance & Cleaning Tracker API", lifespan=lifes
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    # Preview URLs like maintain-xxxxx-3-dsite.vercel.app must be able to
+    # call the API; a missing ACAO header on 500s is what the browser
+    # reports as a CORS failure.
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

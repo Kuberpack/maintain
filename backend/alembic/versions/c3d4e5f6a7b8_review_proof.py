@@ -12,7 +12,10 @@ import sqlalchemy as sa
 
 
 revision: str = "c3d4e5f6a7b8"
-down_revision: Union[str, None] = "b926a4cc0bc4"
+# Merge the two branches that both revised the initial schema:
+# a1b2 (PM checklists) and b926 (admin role). Both are already applied
+# on production; this revision unifies them and adds review/proof columns.
+down_revision: Union[str, tuple[str, ...], None] = ("a1b2c3d4e5f6", "b926a4cc0bc4")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

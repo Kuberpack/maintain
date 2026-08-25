@@ -1,19 +1,11 @@
-// Unset in local dev: requests go through the relative /api and /uploads
-// paths that vite.config.ts's dev-server proxy forwards to VITE_BACKEND_URL,
-// stripping /api before hitting the backend's actual (unprefixed) routes.
-// There's no such proxy in a production build (e.g. Vercel) -- set
-// VITE_API_BASE_URL to the deployed backend's real origin (no trailing
-// slash, no /api suffix: the backend mounts its routes at the root, see
-// backend/app/main.py) so requests go straight there instead.
-const API_ORIGIN = import.meta.env.VITE_API_BASE_URL as string | undefined
-const API_BASE = API_ORIGIN ? API_ORIGIN : '/api'
+// Browser always uses same-origin /api and /uploads.
+// Local `vite`: vite.config.ts proxies /api to the backend.
+// Vercel: vercel.json rewrites those paths to Railway so the phone never
+// talks to *.up.railway.app (blocked on some company WiFi; *.vercel.app is not).
+const API_BASE = '/api'
 
-// For asset paths returned directly by the API (currently just photoUrl,
-// e.g. "/uploads/xxx.jpg") rather than routed through apiFetch below --
-// these need the same origin, but never an /api prefix, matching the
-// backend's separate (non-/api) static-files mount.
 export function resolveAssetUrl(path: string): string {
-  return API_ORIGIN ? `${API_ORIGIN}${path}` : path
+  return path
 }
 
 export class ApiError extends Error {

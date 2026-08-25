@@ -100,24 +100,14 @@ to `frontend/` — rather than the repo root.
    correctly once the project root above is set — I haven't been able to
    confirm this against a real Vercel project, so double-check the
    detected settings before the first deploy rather than assuming.
-3. **Environment variable**:
+3. **Environment variable**: do **not** set `VITE_API_BASE_URL` on Vercel.
+   The browser calls same-origin `/api`. `frontend/vercel.json` rewrites
+   `/api/*` and `/uploads/*` to the Railway backend so company WiFi only
+   needs `*.vercel.app` (it blocks `*.up.railway.app`).
 
-   | Variable | Required? | Value |
-   |---|---|---|
-   | `VITE_API_BASE_URL` | **Yes** | The Railway backend's public URL, e.g. `https://your-app.up.railway.app` — **no trailing slash, no `/api` suffix** (the backend mounts its routes at the root, not under `/api`; see `frontend/.env.example` for the full explanation). |
-
-   Unset locally, this stays empty and the frontend falls back to the
-   relative `/api`/`/uploads` paths that only work through Vite's local dev
-   proxy — so this variable is specifically a **production build** setting,
-   not something to add to a local `.env`.
-
-4. **`frontend/vercel.json`** (added as part of this change): a client-side
-   SPA rewrite so deep links and page refreshes on routes like
-   `/machines/:id` don't 404 against Vercel's static hosting. Not one of
-   the six items originally asked for, but a very standard requirement for
-   any react-router SPA on Vercel, and the failure mode without it (every
-   non-root route 404s on refresh) seemed worth closing proactively rather
-   than leaving as a surprise.
+4. **`frontend/vercel.json`**: (1) proxy `/api` and `/uploads` to Railway;
+   (2) SPA fallback so deep links like `/machines/:id` do not 404 on refresh.
+   The Railway URL in that file must match the public backend host.
 
 ---
 
@@ -127,10 +117,9 @@ to `frontend/` — rather than the repo root.
   until that's done, the frontend's requests will be blocked by CORS.
 - Log in through the deployed frontend with the account created via
   `bootstrap_account`, confirm a machine/task type can be created, and
-  confirm a mark-done photo upload actually displays afterward (this
-  exercises the `VITE_API_BASE_URL`-driven asset resolution described
-  above — this is the one part of this change I could not verify against
-  real Railway/Vercel infrastructure, only against a local stand-in).
+  confirm a mark-done photo upload actually displays afterward.
+  On company WiFi, `https://<frontend>/api/health` should return the
+  backend health JSON even though `*.up.railway.app` is blocked.
 - Rotate every secret still at its dev/seed default before anyone real
   uses the deployment — `PROGRESS.md` §7 already has the full list
   (`JWT_SECRET`, `POSTGRES_PASSWORD`, the seeded management password).

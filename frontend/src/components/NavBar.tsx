@@ -27,7 +27,7 @@ interface NavItem {
 
 const LINKS: NavItem[] = [
   { to: '/today', labelKey: 'today', end: false, badge: 'today' },
-  { to: '/', labelKey: 'machines', end: true, roles: ['admin', 'supervisor', 'management'] },
+  { to: '/machines', labelKey: 'machines', end: true, roles: ['admin', 'supervisor', 'management'] },
   { to: '/review', labelKey: 'review', end: false, roles: ['admin', 'supervisor'], badge: 'review' },
   { to: '/shift', labelKey: 'shift', end: false, roles: ['admin', 'supervisor', 'management'] },
   { to: '/overdue', labelKey: 'overdue', end: false, roles: ['admin', 'supervisor', 'management'] },

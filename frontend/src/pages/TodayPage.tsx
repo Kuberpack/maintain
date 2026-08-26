@@ -231,9 +231,9 @@ export function TodayPage() {
                       ? t.supervisorTodayHint
                       : null}
                   </p>
-                  {(user?.role === 'supervisor' || user?.role === 'admin') && (
+                  {(user?.canAssignOperators || user?.role === 'admin') && (
                     <Link
-                      to="/"
+                      to="/machines"
                       className="mt-2 inline-block text-sm font-medium text-slate-800 underline"
                     >
                       {t.assignOperators}

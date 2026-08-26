@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import operator_machine_ids, require_machine_access
+from app.core.access import work_machine_ids, require_machine_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
@@ -27,13 +27,14 @@ def list_repair_logs(
     current_user: User = Depends(get_current_user),
 ) -> list[RepairLog]:
     query = db.query(RepairLog)
-    scoped_ids = operator_machine_ids(db, current_user)
-    if scoped_ids is not None:
+    scoped_ids = work_machine_ids(db, current_user)
+    if machine_id is not None:
+        require_machine_access(db, current_user, machine_id)
+        query = query.filter(RepairLog.machine_id == machine_id)
+    elif scoped_ids is not None:
         if not scoped_ids:
             return []
         query = query.filter(RepairLog.machine_id.in_(scoped_ids))
-    elif machine_id is not None:
-        query = query.filter(RepairLog.machine_id == machine_id)
     if unresolved_only:
         query = query.filter(RepairLog.resolved_at.is_(None))
     return query.order_by(RepairLog.reported_at.desc()).all()
@@ -41,9 +42,13 @@ def list_repair_logs(
 
 @router.get("/{repair_log_id}", response_model=RepairLogPublic)
 def get_repair_log(
-    repair_log_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(get_current_user)
+    repair_log_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> RepairLog:
-    return get_or_404(db, RepairLog, repair_log_id, "Repair log not found")
+    repair_log = get_or_404(db, RepairLog, repair_log_id, "Repair log not found")
+    require_machine_access(db, current_user, repair_log.machine_id)
+    return repair_log
 
 
 @router.post("", response_model=RepairLogPublic, status_code=201)
@@ -79,6 +84,7 @@ def resolve_repair_log(
     current_user: User = Depends(_resolve_roles),
 ) -> RepairLog:
     repair_log = get_or_404(db, RepairLog, repair_log_id, "Repair log not found")
+    require_machine_access(db, current_user, repair_log.machine_id)
     repair_log.resolved_at = datetime.now(timezone.utc)
     repair_log.resolved_by = current_user.id
     if payload.resolution_notes is not None:
@@ -90,8 +96,11 @@ def resolve_repair_log(
 
 @router.delete("/{repair_log_id}", status_code=204)
 def delete_repair_log(
-    repair_log_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(_resolve_roles)
+    repair_log_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_resolve_roles),
 ) -> None:
     repair_log = get_or_404(db, RepairLog, repair_log_id, "Repair log not found")
+    require_machine_access(db, current_user, repair_log.machine_id)
     db.delete(repair_log)
     commit_or_409(db, "Cannot delete this repair log")

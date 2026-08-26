@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, require_roles
+from app.core.access import work_machine_ids
+from app.core.deps import require_roles
 from app.core.time import today_local
 from app.database import get_db
-from app.models import ReviewStatus, TaskInstance, TaskStatus, UserRole
+from app.models import ReviewStatus, TaskInstance, TaskStatus, User, UserRole
 from app.schemas.base import CamelModel
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -27,13 +28,17 @@ class WeeklyReport(CamelModel):
 
 
 @router.get("/weekly", response_model=WeeklyReport)
-def weekly_report(db: Session = Depends(get_db), _user=Depends(_read_roles)) -> WeeklyReport:
-    return _build_weekly(db)
+def weekly_report(
+    db: Session = Depends(get_db), current_user: User = Depends(_read_roles)
+) -> WeeklyReport:
+    return _build_weekly(db, current_user)
 
 
 @router.get("/weekly.pdf")
-def weekly_report_pdf(db: Session = Depends(get_db), _user=Depends(_read_roles)) -> Response:
-    report = _build_weekly(db)
+def weekly_report_pdf(
+    db: Session = Depends(get_db), current_user: User = Depends(_read_roles)
+) -> Response:
+    report = _build_weekly(db, current_user)
     body = _pdf_bytes(report)
     return Response(
         content=body,
@@ -42,12 +47,16 @@ def weekly_report_pdf(db: Session = Depends(get_db), _user=Depends(_read_roles))
     )
 
 
-def _build_weekly(db: Session) -> WeeklyReport:
+def _build_weekly(db: Session, user: User) -> WeeklyReport:
     today = today_local()
     week_start = today - timedelta(days=today.weekday())
     week_end = week_start + timedelta(days=6)
 
     instances = db.query(TaskInstance).all()
+    scoped_ids = work_machine_ids(db, user)
+    if scoped_ids is not None:
+        allowed = set(scoped_ids)
+        instances = [ti for ti in instances if ti.task_type is not None and ti.task_type.machine_id in allowed]
     approved = [
         ti
         for ti in instances

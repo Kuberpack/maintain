@@ -22,6 +22,24 @@ _read_roles = require_roles(UserRole.admin, UserRole.supervisor, UserRole.manage
 _create_delete_roles = require_roles(UserRole.admin, UserRole.supervisor)
 
 
+def _set_can_assign_operators(db: Session, user: User, want: bool) -> None:
+    """Only one supervisor at a time. Setting True on this person turns it off
+    for anyone else so the flag can be handed over when the real person is
+    decided."""
+    if not want:
+        user.can_assign_operators = False
+        return
+    if user.role != UserRole.supervisor:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Only a supervisor can be given operator-assignment access",
+        )
+    db.query(User).filter(User.id != user.id, User.can_assign_operators.is_(True)).update(
+        {User.can_assign_operators: False}
+    )
+    user.can_assign_operators = True
+
+
 def _check_can_manage_target(current_user: User, target: User, new_role: UserRole | None) -> None:
     """Shared scope check for creating/editing/deleting *someone else's*
     account (never called for a user acting on their own record -- that
@@ -96,6 +114,10 @@ def create_user(
         password_hash=hash_secret(payload.password) if payload.password else None,
         created_by_id=current_user.id,
     )
+    if payload.can_assign_operators:
+        if current_user.role != UserRole.admin:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Only admin can grant operator-assignment access")
+        _set_can_assign_operators(db, user, True)
     db.add(user)
     db.flush()
     _record_audit_event(db, UserAuditAction.created, current_user, user)
@@ -126,12 +148,20 @@ def update_user(
 
     pin = data.pop("pin", None)
     password = data.pop("password", None)
+    want_assign = data.pop("can_assign_operators", None)
+    if want_assign is not None:
+        if current_user.role != UserRole.admin:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Only admin can change operator-assignment access")
     for field, value in data.items():
         setattr(user, field, value)
     if pin is not None:
         user.pin_hash = hash_secret(pin)
     if password is not None:
         user.password_hash = hash_secret(password)
+    if user.role != UserRole.supervisor:
+        user.can_assign_operators = False
+    elif want_assign is not None:
+        _set_can_assign_operators(db, user, want_assign)
 
     # Exactly one credential per role. Clear whichever hash no longer applies
     # so a role change can't leave a stale login path open on the other

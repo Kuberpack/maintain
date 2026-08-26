@@ -5,8 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.access import require_machine_access, validate_operator_id, validate_supervisor_id
-from app.core.deps import get_current_user, require_roles
+from app.core.access import (
+    can_see_supervisor_assignment,
+    catalog_machine_ids,
+    require_machine_access,
+    validate_operator_id,
+    validate_supervisor_id,
+)
+from app.core.deps import get_current_user, require_assign_operators, require_assign_supervisors, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
 from app.models import Machine, User, UserRole
@@ -20,35 +26,48 @@ from app.schemas.machines import (
 
 router = APIRouter(prefix="/machines", tags=["machines"])
 
-_write_roles = require_roles(UserRole.supervisor, UserRole.admin)
+_admin_write = require_roles(UserRole.admin)
 
 _MACHINE_LOAD = (joinedload(Machine.operator), joinedload(Machine.supervisor))
 
 
-def _machines_by_ids(db: Session, machine_ids: list[uuid.UUID]) -> list[Machine]:
-    return (
+def _public_machine(machine: Machine, viewer: User) -> MachinePublic:
+    payload = MachinePublic.model_validate(machine)
+    if can_see_supervisor_assignment(viewer):
+        return payload
+    return payload.model_copy(update={"supervisor_id": None, "supervisor": None})
+
+
+def _machines_by_ids(db: Session, machine_ids: list[uuid.UUID], viewer: User) -> list[MachinePublic]:
+    rows = (
         db.query(Machine)
         .options(*_MACHINE_LOAD)
         .filter(Machine.id.in_(machine_ids))
         .order_by(Machine.name)
         .all()
     )
+    return [_public_machine(row, viewer) for row in rows]
 
 
 @router.get("", response_model=list[MachinePublic])
-def list_machines(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> list[Machine]:
+def list_machines(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> list[MachinePublic]:
     query = db.query(Machine).options(*_MACHINE_LOAD).order_by(Machine.group_name.nulls_last(), Machine.name)
-    if current_user.role == UserRole.operator:
-        query = query.filter(Machine.operator_id == current_user.id)
-    return query.all()
+    scoped_ids = catalog_machine_ids(db, current_user)
+    if scoped_ids is not None:
+        if not scoped_ids:
+            return []
+        query = query.filter(Machine.id.in_(scoped_ids))
+    return [_public_machine(row, current_user) for row in query.all()]
 
 
 @router.put("/operator-assignments", response_model=list[MachinePublic])
 def set_operator_assignments(
     payload: MachineOperatorAssignmentsUpdate,
     db: Session = Depends(get_db),
-    _user: User = Depends(_write_roles),
-) -> list[Machine]:
+    current_user: User = Depends(require_assign_operators),
+) -> list[MachinePublic]:
     """Save who sits on which unit in one request.
 
     The same operator may cover several units at once (Suresh on four FAC
@@ -75,15 +94,15 @@ def set_operator_assignments(
         by_id[row.machine_id].operator_id = row.operator_id
 
     commit_or_409(db, "Could not save operator assignments")
-    return _machines_by_ids(db, machine_ids)
+    return _machines_by_ids(db, machine_ids, current_user)
 
 
 @router.put("/supervisor-assignments", response_model=list[MachinePublic])
 def set_supervisor_assignments(
     payload: MachineSupervisorAssignmentsUpdate,
     db: Session = Depends(get_db),
-    _user: User = Depends(_write_roles),
-) -> list[Machine]:
+    current_user: User = Depends(require_assign_supervisors),
+) -> list[MachinePublic]:
     """Dedicated supervisor per machine. Null is valid (plant equipment)."""
     assignments = payload.assignments
     machine_ids = [row.machine_id for row in assignments]
@@ -106,21 +125,24 @@ def set_supervisor_assignments(
         by_id[row.machine_id].supervisor_id = row.supervisor_id
 
     commit_or_409(db, "Could not save supervisor assignments")
-    return _machines_by_ids(db, machine_ids)
+    return _machines_by_ids(db, machine_ids, current_user)
 
 
 @router.get("/{machine_id}", response_model=MachinePublic)
 def get_machine(
     machine_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-) -> Machine:
+) -> MachinePublic:
     machine = require_machine_access(db, current_user, machine_id)
-    return db.query(Machine).options(*_MACHINE_LOAD).filter(Machine.id == machine.id).one()
+    loaded = db.query(Machine).options(*_MACHINE_LOAD).filter(Machine.id == machine.id).one()
+    return _public_machine(loaded, current_user)
 
 
 @router.post("", response_model=MachinePublic, status_code=201)
 def create_machine(
-    payload: MachineCreate, db: Session = Depends(get_db), _user: User = Depends(_write_roles)
-) -> Machine:
+    payload: MachineCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_admin_write),
+) -> MachinePublic:
     validate_operator_id(db, payload.operator_id)
     validate_supervisor_id(db, payload.supervisor_id)
     data = payload.model_dump()
@@ -129,7 +151,8 @@ def create_machine(
     db.add(machine)
     commit_or_409(db, "Could not create machine")
     db.refresh(machine)
-    return db.query(Machine).options(*_MACHINE_LOAD).filter(Machine.id == machine.id).one()
+    loaded = db.query(Machine).options(*_MACHINE_LOAD).filter(Machine.id == machine.id).one()
+    return _public_machine(loaded, current_user)
 
 
 @router.patch("/{machine_id}", response_model=MachinePublic)
@@ -137,8 +160,8 @@ def update_machine(
     machine_id: uuid.UUID,
     payload: MachineUpdate,
     db: Session = Depends(get_db),
-    _user: User = Depends(_write_roles),
-) -> Machine:
+    current_user: User = Depends(_admin_write),
+) -> MachinePublic:
     machine = get_or_404(db, Machine, machine_id, "Machine not found")
     data = payload.model_dump(exclude_unset=True)
     if "operator_id" in data:
@@ -151,12 +174,13 @@ def update_machine(
         setattr(machine, field, value)
     commit_or_409(db, "Could not update machine")
     db.refresh(machine)
-    return db.query(Machine).options(*_MACHINE_LOAD).filter(Machine.id == machine.id).one()
+    loaded = db.query(Machine).options(*_MACHINE_LOAD).filter(Machine.id == machine.id).one()
+    return _public_machine(loaded, current_user)
 
 
 @router.delete("/{machine_id}", status_code=204)
 def delete_machine(
-    machine_id: uuid.UUID, db: Session = Depends(get_db), _user: User = Depends(_write_roles)
+    machine_id: uuid.UUID, db: Session = Depends(get_db), _user: User = Depends(_admin_write)
 ) -> None:
     machine = get_or_404(db, Machine, machine_id, "Machine not found")
     db.delete(machine)

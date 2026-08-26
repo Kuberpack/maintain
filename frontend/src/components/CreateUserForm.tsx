@@ -8,6 +8,7 @@ interface CreateUserFormProps {
   // Roles this creator is allowed to assign -- admin gets all four, a
   // supervisor only ever gets ['operator'].
   allowedRoles: UserRole[]
+  canToggleAssignOperators?: boolean
   onCreated: () => void
   onCancel: () => void
 }
@@ -19,7 +20,12 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
 }
 
-export function CreateUserForm({ allowedRoles, onCreated, onCancel }: CreateUserFormProps) {
+export function CreateUserForm({
+  allowedRoles,
+  canToggleAssignOperators = false,
+  onCreated,
+  onCancel,
+}: CreateUserFormProps) {
   const [name, setName] = useState('')
   const [role, setRole] = useState<UserRole>(allowedRoles[0] ?? 'operator')
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -27,6 +33,7 @@ export function CreateUserForm({ allowedRoles, onCreated, onCancel }: CreateUser
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [whatsappNumber, setWhatsappNumber] = useState('')
+  const [canAssignOperators, setCanAssignOperators] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -46,6 +53,7 @@ export function CreateUserForm({ allowedRoles, onCreated, onCancel }: CreateUser
         whatsappNumber: whatsappNumber || undefined,
         pin: isManagement ? undefined : pin,
         password: isManagement ? password : undefined,
+        canAssignOperators: canToggleAssignOperators && role === 'supervisor' ? canAssignOperators : undefined,
       })
       onCreated()
     } catch (err) {
@@ -149,6 +157,22 @@ export function CreateUserForm({ allowedRoles, onCreated, onCancel }: CreateUser
           className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
         />
       </label>
+      {canToggleAssignOperators && role === 'supervisor' && (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={canAssignOperators}
+            onChange={(e) => setCanAssignOperators(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            <span className="font-medium text-slate-700">Can assign operators</span>
+            <span className="block text-slate-500">
+              Only one supervisor at a time. Turns it off for anyone else who currently has it.
+            </span>
+          </span>
+        </label>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2">
         <button

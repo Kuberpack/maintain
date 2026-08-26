@@ -12,11 +12,47 @@ def assigned_machines(db: Session, user: User) -> list[Machine]:
     return db.query(Machine).filter(Machine.operator_id == user.id).order_by(Machine.name).all()
 
 
-def operator_machine_ids(db: Session, user: User) -> list[uuid.UUID] | None:
-    """None = not an operator (no scoping). Empty list = operator with no units."""
-    if user.role != UserRole.operator:
+def can_assign_operators(user: User) -> bool:
+    return user.role == UserRole.admin or (
+        user.role == UserRole.supervisor and user.can_assign_operators
+    )
+
+
+def can_assign_supervisors(user: User) -> bool:
+    return user.role in (UserRole.admin, UserRole.management)
+
+
+def can_see_supervisor_assignment(user: User) -> bool:
+    return user.role in (UserRole.admin, UserRole.management)
+
+
+def work_machine_ids(db: Session, user: User) -> list[uuid.UUID] | None:
+    """Machines this user may see on Today / review / overdue.
+
+    None = plant-wide (admin, management). Empty list = no machines in scope.
+    Regular supervisors — and the one operator-assigner — only see units
+    dedicated to them. The assigner still gets the full plant on GET /machines
+    via catalog_machine_ids.
+    """
+    if user.role == UserRole.operator:
+        return [machine.id for machine in assigned_machines(db, user)]
+    if user.role == UserRole.supervisor:
+        return [
+            row[0]
+            for row in db.query(Machine.id).filter(Machine.supervisor_id == user.id).order_by(Machine.name).all()
+        ]
+    return None
+
+
+def catalog_machine_ids(db: Session, user: User) -> list[uuid.UUID] | None:
+    """Machines listed on the Machines page.
+
+    The one supervisor who assigns operators needs every unit so they can
+    pick operators plant-wide. Everyone else matches work_machine_ids.
+    """
+    if user.role == UserRole.supervisor and user.can_assign_operators:
         return None
-    return [machine.id for machine in assigned_machines(db, user)]
+    return work_machine_ids(db, user)
 
 
 def require_machine_access(db: Session, user: User, machine_id: uuid.UUID) -> Machine:
@@ -25,6 +61,12 @@ def require_machine_access(db: Session, user: User, machine_id: uuid.UUID) -> Ma
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Machine not found")
     if user.role == UserRole.operator and machine.operator_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This machine is assigned to another operator")
+    if (
+        user.role == UserRole.supervisor
+        and not user.can_assign_operators
+        and machine.supervisor_id != user.id
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This machine is assigned to another supervisor")
     return machine
 
 

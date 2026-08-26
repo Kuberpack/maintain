@@ -38,3 +38,19 @@ def require_roles(*roles: UserRole):
         return user
 
     return dependency
+
+
+def require_assign_operators(user: User = Depends(get_current_user)) -> User:
+    from app.core.access import can_assign_operators
+
+    if not can_assign_operators(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not permitted to assign operators")
+    return user
+
+
+def require_assign_supervisors(user: User = Depends(get_current_user)) -> User:
+    from app.core.access import can_assign_supervisors
+
+    if not can_assign_supervisors(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not permitted to assign supervisors")
+    return user

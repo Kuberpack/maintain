@@ -32,14 +32,16 @@ def run() -> None:
                 existing.name = spec["name"]
                 existing.role = spec["role"]
                 existing.whatsapp_number = existing.whatsapp_number or phone
+                existing.can_assign_operators = bool(spec.get("can_assign_operators"))
                 continue
-            pin = random_pin()
+            pin = "1234" if spec.get("can_assign_operators") else random_pin()
             user = User(
                 name=spec["name"],
                 role=spec["role"],
                 phone_number=phone,
                 whatsapp_number=phone,
                 pin_hash=hash_secret(pin),
+                can_assign_operators=bool(spec.get("can_assign_operators")),
             )
             db.add(user)
             db.flush()

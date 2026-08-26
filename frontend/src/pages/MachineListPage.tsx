@@ -31,13 +31,38 @@ export function MachineListPage() {
   const taskTypeList = taskTypes.data
   const taskInstanceList = taskInstances.data
   const cfg = config.data
-  const openRepairIds = new Set((repairs.data ?? []).map((r) => r.machineId))
+  const openRepairs = repairs.data ?? []
+  const openRepairIds = new Set(openRepairs.map((r) => r.machineId))
+  const machineNameById = new Map(machineList.map((m) => [m.id, m.name]))
 
   const taskTypeToMachine = new Map(taskTypeList.map((tt) => [tt.id, tt.machineId]))
 
   return (
     <div className="mx-auto max-w-5xl p-4">
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Machines</h1>
+
+      {/* Operators log repairs and part swaps without asking first, so this is
+          where a supervisor finds out what broke and what it stops. */}
+      {openRepairs.length > 0 && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="font-semibold text-red-900">
+            {openRepairs.length} open repair{openRepairs.length === 1 ? '' : 's'}
+          </p>
+          <ul className="mt-1 flex flex-col gap-1 text-sm text-red-800">
+            {openRepairs.map((log) => (
+              <li key={log.id}>
+                <Link to={`/machines/${log.machineId}`} className="font-medium hover:underline">
+                  {machineNameById.get(log.machineId) ?? 'Machine'}
+                </Link>
+                : {log.issueDescription}
+                {log.impact ? ` — ${log.impact}` : ''}
+                <span className="text-red-500"> · {log.reportedAt.slice(0, 10)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {(user?.role === 'supervisor' || user?.role === 'admin') && (
         <CreateMachineForm onCreated={() => void machines.refetch()} />
       )}

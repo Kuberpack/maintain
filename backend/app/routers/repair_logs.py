@@ -60,7 +60,13 @@ def create_repair_log(
     db.refresh(repair_log)
     from app.services.notifications import notify_new_repair
 
-    notify_new_repair(db, machine.name, repair_log.issue_description)
+    notify_new_repair(
+        db,
+        machine.name,
+        repair_log.issue_description,
+        repair_log.impact,
+        current_user.name,
+    )
     return repair_log
 
 

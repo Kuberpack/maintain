@@ -48,7 +48,37 @@ def notify_rejection(db: Session, instance: TaskInstance, operator_id: uuid.UUID
         notify_user(operator, "Check rejected — please redo", message)
 
 
-def notify_new_repair(db: Session, machine_name: str, issue: str) -> None:
-    message = f"New repair on {machine_name}: {issue}"
+def notify_new_repair(
+    db: Session,
+    machine_name: str,
+    issue: str,
+    impact: str | None = None,
+    reported_by_name: str | None = None,
+) -> None:
+    parts = [f"New repair on {machine_name}: {issue}"]
+    if impact:
+        parts.append(f"Will cause: {impact}")
+    if reported_by_name:
+        parts.append(f"Reported by {reported_by_name}")
+    message = ". ".join(parts)
     for user in _supervisors(db):
         notify_user(user, "New repair reported", message)
+
+
+def notify_part_replacement(
+    db: Session,
+    machine_name: str,
+    part_name: str,
+    replaced_by_name: str | None = None,
+    notes: str | None = None,
+) -> None:
+    """Operators log part swaps themselves, so the supervisor finds out from
+    this message rather than from being asked for permission first."""
+    parts = [f"Part replaced on {machine_name}: {part_name}"]
+    if notes:
+        parts.append(notes)
+    if replaced_by_name:
+        parts.append(f"Logged by {replaced_by_name}")
+    message = ". ".join(parts)
+    for user in _supervisors(db):
+        notify_user(user, "Part replacement logged", message)

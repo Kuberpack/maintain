@@ -12,6 +12,21 @@ export interface User {
   phoneNumber: string | null
   whatsappNumber: string | null
   createdAt: string
+  createdById: string | null
+}
+
+export type UserAuditAction = 'created' | 'deleted'
+
+export interface UserAuditEvent {
+  id: string
+  action: UserAuditAction
+  actorId: string | null
+  actorName: string
+  actorRole: UserRole
+  targetUserId: string | null
+  targetName: string
+  targetRole: UserRole
+  at: string
 }
 
 export interface Machine {
@@ -97,6 +112,7 @@ export interface RepairLog {
   reportedAt: string
   reportedBy: string | null
   issueDescription: string
+  impact: string | null
   downtimeMinutes: number | null
   resolvedAt: string | null
   resolvedBy: string | null
@@ -118,6 +134,41 @@ export interface HandoverNote {
   note: string
   createdBy: string | null
   createdAt: string
+}
+
+export type VendorSpecialty = 'mechanical' | 'electrical' | 'hydraulics' | 'oem' | 'other'
+
+export interface VendorContact {
+  id: string
+  name: string
+  company: string | null
+  specialty: VendorSpecialty
+  phoneNumber: string
+  whatsappNumber: string | null
+  notes: string | null
+  machineId: string | null
+  createdAt: string
+}
+
+export type OutputUnit = 'kg' | 'pcs'
+
+export interface ShiftLog {
+  id: string
+  machineId: string
+  logDate: string
+  startTime: string | null
+  endTime: string | null
+  outputQty: number | null
+  outputUnit: OutputUnit
+  jobChangeCount: number | null
+  wastageBoardline: number | null
+  wastageMachine: number | null
+  delayReason: string | null
+  delayMinutes: number | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+  runningMinutes: number | null
 }
 
 export interface PublicConfig {

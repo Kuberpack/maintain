@@ -38,7 +38,13 @@ class Settings(BaseSettings):
     alert_unreviewed_hours: int = 8
 
     local_timezone: str = "Asia/Kolkata"
-    daily_check_hour: int = 7
+    # Daily task instances appear at 08:00 local, alerts go out at 08:30 --
+    # the half hour gives operators the work on screen before anyone's phone
+    # buzzes about it.
+    daily_task_hour: int = 8
+    daily_task_minute: int = 0
+    daily_check_hour: int = 8
+    daily_check_minute: int = 30
 
     uploads_dir: str = "uploads"
     max_upload_size_mb: int = 8

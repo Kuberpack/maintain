@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAsync } from '../lib/useAsync'
-import { listUsers, deleteUser } from '../api/users'
+import { listUsers, deleteUser, listUserAuditEvents } from '../api/users'
 import { listMachines } from '../api/machines'
 import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
@@ -25,6 +25,7 @@ export function UsersPage() {
 
   const users = useAsync(() => (canView ? listUsers() : Promise.resolve([])), [canView])
   const machines = useAsync(() => (canView ? listMachines() : Promise.resolve([])), [canView])
+  const auditEvents = useAsync(() => (canView ? listUserAuditEvents() : Promise.resolve([])), [canView])
 
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -40,6 +41,8 @@ export function UsersPage() {
   if (!users.data) return null
 
   const userList = users.data
+  const nameById = new Map(userList.map((u) => [u.id, u.name]))
+  const auditList = auditEvents.data ?? []
 
   // Whether the viewer can edit/delete *this* row -- self-editing is
   // handled by the separate My Profile page instead, so it's always
@@ -59,6 +62,7 @@ export function UsersPage() {
     try {
       await deleteUser(target.id)
       await users.refetch()
+      auditEvents.refetch()
     } catch (err) {
       setDeleteError(err instanceof ApiError ? err.message : 'Could not delete user')
     } finally {
@@ -77,6 +81,7 @@ export function UsersPage() {
             onCreated={() => {
               setCreating(false)
               void users.refetch()
+              auditEvents.refetch()
             }}
             onCancel={() => setCreating(false)}
           />
@@ -122,6 +127,13 @@ export function UsersPage() {
                         }`
                       : ''}
                   </p>
+                  <p className="text-xs text-slate-400">
+                    {u.createdById
+                      ? `Added by ${nameById.get(u.createdById) ?? 'a removed account'} on ${new Date(
+                          u.createdAt,
+                        ).toLocaleDateString()}`
+                      : `Added on ${new Date(u.createdAt).toLocaleDateString()}`}
+                  </p>
                 </div>
                 {canManageRow(u) && (
                   <div className="flex flex-wrap gap-2">
@@ -147,6 +159,28 @@ export function UsersPage() {
           </li>
         ))}
       </ul>
+
+      <section className="mt-8">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Staff log</h2>
+        {auditList.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            No account changes recorded yet. Everyone who adds or removes a user from here on is logged.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {auditList.map((event) => (
+              <li key={event.id} className="text-sm text-slate-600">
+                <span className="font-medium text-slate-900">{event.actorName}</span>{' '}
+                <span className="text-slate-400">({event.actorRole})</span>{' '}
+                {event.action === 'created' ? 'added' : 'removed'}{' '}
+                <span className="font-medium text-slate-900">{event.targetName}</span>{' '}
+                <span className="text-slate-400">({event.targetRole})</span> ·{' '}
+                {new Date(event.at).toLocaleString()}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   )
 }

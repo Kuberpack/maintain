@@ -1,8 +1,12 @@
 import { apiFetch } from './client'
-import type { User, UserRole } from './types'
+import type { User, UserAuditEvent, UserRole } from './types'
 
 export function listUsers(): Promise<User[]> {
   return apiFetch<User[]>('/users')
+}
+
+export function listUserAuditEvents(): Promise<UserAuditEvent[]> {
+  return apiFetch<UserAuditEvent[]>('/users/audit-events')
 }
 
 export function createUser(payload: {

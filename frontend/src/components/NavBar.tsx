@@ -9,7 +9,17 @@ import type { UserRole } from '../api/types'
 
 interface NavItem {
   to: string
-  labelKey: 'today' | 'machines' | 'review' | 'overdue' | 'summary' | 'reports' | 'users' | 'profile'
+  labelKey:
+    | 'today'
+    | 'machines'
+    | 'review'
+    | 'overdue'
+    | 'summary'
+    | 'reports'
+    | 'users'
+    | 'profile'
+    | 'directory'
+    | 'shift'
   end: boolean
   roles?: readonly UserRole[]
   badge?: 'review' | 'today'
@@ -19,10 +29,12 @@ const LINKS: NavItem[] = [
   { to: '/today', labelKey: 'today', end: false, badge: 'today' },
   { to: '/', labelKey: 'machines', end: true, roles: ['admin', 'supervisor', 'management'] },
   { to: '/review', labelKey: 'review', end: false, roles: ['admin', 'supervisor'], badge: 'review' },
+  { to: '/shift', labelKey: 'shift', end: false, roles: ['admin', 'supervisor', 'management'] },
   { to: '/overdue', labelKey: 'overdue', end: false, roles: ['admin', 'supervisor', 'management'] },
   { to: '/summary', labelKey: 'summary', end: false, roles: ['admin', 'supervisor', 'management'] },
   { to: '/reports', labelKey: 'reports', end: false, roles: ['admin', 'supervisor', 'management'] },
   { to: '/users', labelKey: 'users', end: false, roles: ['admin', 'supervisor', 'management'] },
+  { to: '/directory', labelKey: 'directory', end: false },
   { to: '/profile', labelKey: 'profile', end: false },
 ]
 

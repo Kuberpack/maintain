@@ -13,6 +13,7 @@ from app.schemas.part_replacements import (
     PartReplacementPublic,
     PartReplacementUpdate,
 )
+from app.services.notifications import notify_part_replacement
 
 router = APIRouter(prefix="/part-replacements", tags=["part_replacements"])
 
@@ -53,11 +54,18 @@ def create_part_replacement(
     current_user: User = Depends(_report_roles),
 ) -> PartReplacement:
     require_machine_access(db, current_user, payload.machine_id)
-    get_or_404(db, Machine, payload.machine_id, "Machine not found")
+    machine = get_or_404(db, Machine, payload.machine_id, "Machine not found")
     part_replacement = PartReplacement(**payload.model_dump(), replaced_by=current_user.id)
     db.add(part_replacement)
     db.commit()
     db.refresh(part_replacement)
+    notify_part_replacement(
+        db,
+        machine.name,
+        part_replacement.part_name,
+        current_user.name,
+        part_replacement.notes,
+    )
     return part_replacement
 
 

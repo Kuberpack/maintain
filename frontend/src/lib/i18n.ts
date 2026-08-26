@@ -50,6 +50,35 @@ type Msg = {
   machineDetails: string
   languageEn: string
   languageHi: string
+  directory: string
+  noContacts: string
+  call: string
+  whatsapp: string
+  allMachines: string
+  reportRepair: string
+  logReplacement: string
+  repairImpact: string
+  repairImpactHint: string
+  issueDescription: string
+  downtimeMinutes: string
+  partName: string
+  replacedOn: string
+  myMachine: string
+  shift: string
+  shiftLog: string
+  shiftLogSaved: string
+  startTime: string
+  endTime: string
+  runningHours: string
+  output: string
+  jobChanges: string
+  wastageBoardline: string
+  wastageMachine: string
+  delayReason: string
+  delayMinutes: string
+  save: string
+  cancel: string
+  optional: string
 }
 
 export const messages: Record<Locale, Msg> = {
@@ -103,6 +132,35 @@ export const messages: Record<Locale, Msg> = {
     machineDetails: 'Machine details',
     languageEn: 'EN',
     languageHi: 'हिं',
+    directory: 'Help numbers',
+    noContacts: 'No outside contacts yet.',
+    call: 'Call',
+    whatsapp: 'WhatsApp',
+    allMachines: 'All machines',
+    reportRepair: 'Report a repair',
+    logReplacement: 'Log a part replacement',
+    repairImpact: 'What will this cause?',
+    repairImpactHint: 'e.g. feeder is down, no printing this shift',
+    issueDescription: 'What is wrong?',
+    downtimeMinutes: 'Downtime, minutes',
+    partName: 'Part name',
+    replacedOn: 'Replaced on',
+    myMachine: 'My machine',
+    shift: 'Shift',
+    shiftLog: "Today's shift log",
+    shiftLogSaved: 'Shift log saved',
+    startTime: 'Start time',
+    endTime: 'End time',
+    runningHours: 'Running hours',
+    output: 'Total output',
+    jobChanges: 'Job changes',
+    wastageBoardline: 'Wastage — board line',
+    wastageMachine: 'Wastage — machine',
+    delayReason: 'Reason of delay',
+    delayMinutes: 'Delay, minutes',
+    save: 'Save',
+    cancel: 'Cancel',
+    optional: 'optional',
   },
   hi: {
     today: 'आज का काम',
@@ -154,6 +212,35 @@ export const messages: Record<Locale, Msg> = {
     machineDetails: 'मशीन की जानकारी',
     languageEn: 'EN',
     languageHi: 'हिं',
+    directory: 'मदद के नंबर',
+    noContacts: 'अभी कोई बाहरी नंबर नहीं।',
+    call: 'कॉल करें',
+    whatsapp: 'व्हाट्सएप',
+    allMachines: 'सभी मशीनें',
+    reportRepair: 'मरम्मत दर्ज करें',
+    logReplacement: 'पार्ट बदलना दर्ज करें',
+    repairImpact: 'इससे क्या रुकेगा?',
+    repairImpactHint: 'जैसे: फीडर बंद है, इस शिफ्ट में छपाई नहीं होगी',
+    issueDescription: 'क्या खराबी है?',
+    downtimeMinutes: 'मशीन बंद रही, मिनट',
+    partName: 'पार्ट का नाम',
+    replacedOn: 'कब बदला',
+    myMachine: 'मेरी मशीन',
+    shift: 'शिफ्ट',
+    shiftLog: 'आज का शिफ्ट लॉग',
+    shiftLogSaved: 'शिफ्ट लॉग सेव हो गया',
+    startTime: 'शुरू का समय',
+    endTime: 'बंद का समय',
+    runningHours: 'चलने के घंटे',
+    output: 'कुल उत्पादन',
+    jobChanges: 'जॉब चेंज',
+    wastageBoardline: 'बर्बादी — बोर्ड लाइन',
+    wastageMachine: 'बर्बादी — मशीन',
+    delayReason: 'देरी का कारण',
+    delayMinutes: 'देरी, मिनट',
+    save: 'सेव करें',
+    cancel: 'रद्द करें',
+    optional: 'ज़रूरी नहीं',
   },
 }
 

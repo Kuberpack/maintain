@@ -10,6 +10,11 @@ import { computeDisplayStatus, daysUntilDue } from '../lib/status'
 import { StatusBadge } from '../components/StatusBadge'
 import { ChecklistRunForm } from '../components/ChecklistRunForm'
 import { CameraCapture } from '../components/CameraCapture'
+import { ReportRepairForm } from '../components/ReportRepairForm'
+import { LogPartReplacementForm } from '../components/LogPartReplacementForm'
+import { ShiftLogForm } from '../components/ShiftLogForm'
+import { listShiftLogs } from '../api/shiftLogs'
+import { todayLocalDate } from '../lib/date'
 import { markTaskInstanceDone } from '../api/taskInstances'
 import { uploadPhoto } from '../api/photos'
 import { ApiError } from '../api/client'
@@ -27,6 +32,8 @@ export function TodayPage() {
   const instances = useAsync(() => listTaskInstances(), [])
   const repairs = useAsync(() => listRepairLogs({ unresolvedOnly: true }), [])
   const config = useAsync(() => getPublicConfig(), [])
+  const today = todayLocalDate()
+  const shiftLogs = useAsync(() => listShiftLogs({ dateFrom: today, dateTo: today }), [today])
 
   const [runningId, setRunningId] = useState<string | null>(null)
   const [photos, setPhotos] = useState<Record<string, File | null>>({})
@@ -35,6 +42,18 @@ export function TodayPage() {
 
   const loading = machines.loading || taskTypes.loading || instances.loading || repairs.loading || config.loading
   const loadError = machines.error ?? taskTypes.error ?? instances.error ?? repairs.error ?? config.error
+
+  // The one machine this page's actions apply to. An operator only ever gets
+  // their assigned machine back from /machines, so there is no ambiguity for
+  // them; other roles have to say which machine via ?machine=.
+  const actionMachine = useMemo(() => {
+    const list = machines.data ?? []
+    if (focusMachine) return list.find((m) => m.id === focusMachine) ?? null
+    if (user?.role === 'operator') return list[0] ?? null
+    return null
+  }, [machines.data, focusMachine, user?.role])
+
+  const canDoFloorWork = user?.role === 'operator' || user?.role === 'supervisor' || user?.role === 'admin'
 
   const cards = useMemo(() => {
     if (!machines.data || !taskTypes.data || !instances.data || !config.data) return []
@@ -100,10 +119,43 @@ export function TodayPage() {
           <p className="font-semibold text-red-800">{t.repairOpen}</p>
           <ul className="mt-1 text-sm text-red-700">
             {openRepairs.slice(0, 5).map((log) => (
-              <li key={log.id}>{log.issueDescription}</li>
+              <li key={log.id}>
+                {log.issueDescription}
+                {log.impact ? ` — ${log.impact}` : ''}
+              </li>
             ))}
           </ul>
         </div>
+      )}
+
+      {actionMachine && canDoFloorWork && (
+        <section className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            {t.myMachine}: {actionMachine.name}
+          </h2>
+          <div className="flex flex-col gap-2">
+            <ReportRepairForm large machineId={actionMachine.id} onReported={() => void repairs.refetch()} />
+            <LogPartReplacementForm large machineId={actionMachine.id} onLogged={() => undefined} />
+            <Link
+              to="/directory"
+              className="min-h-14 rounded-xl border border-slate-300 px-4 py-4 text-center text-lg font-semibold text-slate-700"
+            >
+              {t.directory}
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {actionMachine && canDoFloorWork && !shiftLogs.loading && (
+        <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{t.shiftLog}</h2>
+          <ShiftLogForm
+            large
+            machineId={actionMachine.id}
+            existing={shiftLogs.data?.find((log) => log.machineId === actionMachine.id) ?? null}
+            onSaved={() => void shiftLogs.refetch()}
+          />
+        </section>
       )}
 
       {cards.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-6 text-lg text-slate-600">{t.nothingToday}</p>}

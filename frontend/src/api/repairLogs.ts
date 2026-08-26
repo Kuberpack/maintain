@@ -12,6 +12,7 @@ export function listRepairLogs(params?: { machineId?: string; unresolvedOnly?: b
 export function createRepairLog(payload: {
   machineId: string
   issueDescription: string
+  impact: string
   downtimeMinutes?: number
 }): Promise<RepairLog> {
   return apiFetch<RepairLog>('/repair-logs', {

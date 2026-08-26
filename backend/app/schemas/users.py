@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import Field, model_validator
 
-from app.models import UserRole
+from app.models import UserAuditAction, UserRole
 from app.schemas.base import CamelModel
 
 
@@ -55,3 +55,16 @@ class UserPublic(CamelModel):
     phone_number: str | None
     whatsapp_number: str | None
     created_at: datetime
+    created_by_id: uuid.UUID | None
+
+
+class UserAuditEventPublic(CamelModel):
+    id: uuid.UUID
+    action: UserAuditAction
+    actor_id: uuid.UUID | None
+    actor_name: str
+    actor_role: UserRole
+    target_user_id: uuid.UUID | None
+    target_name: str
+    target_role: UserRole
+    at: datetime

@@ -11,17 +11,19 @@ from app.database import engine
 from app.routers import (
     auth,
     config,
+    contacts,
     handover,
     machines,
     part_replacements,
     photos,
     repair_logs,
     reports,
+    shift_logs,
     task_instances,
     task_types,
     users,
 )
-from app.scheduler import start_scheduler, stop_scheduler
+from app.scheduler import catch_up_daily_instances, start_scheduler, stop_scheduler
 
 settings = get_settings()
 
@@ -31,6 +33,10 @@ if not settings.s3_bucket:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # Catch-up run: a restart or deploy after 08:00 would otherwise leave
+    # operators with no daily work until tomorrow morning. Idempotent, so a
+    # restart at 08:05 doesn't duplicate what the cron job just created.
+    catch_up_daily_instances()
     start_scheduler()
     yield
     stop_scheduler()
@@ -57,6 +63,8 @@ app.include_router(repair_logs.router)
 app.include_router(part_replacements.router)
 app.include_router(photos.router)
 app.include_router(handover.router)
+app.include_router(contacts.router)
+app.include_router(shift_logs.router)
 app.include_router(reports.router)
 
 

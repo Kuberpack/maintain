@@ -13,11 +13,57 @@ from app.models import (
     ReviewStatus,
     TaskInstance,
     TaskStatus,
+    TaskType,
 )
 from app.schemas.checklists import ChecklistItemResultInput
 
 FAST_SUBMIT_SECONDS = 180
 FAST_SUBMIT_MIN_ITEMS = 10
+
+DAILY_INTERVAL_DAYS = 1
+
+
+def ensure_daily_instance(db: Session, task_type: TaskType) -> TaskInstance | None:
+    """Give a daily task type an instance due today, if it doesn't have one.
+
+    Returns the created instance, or None when today is already covered or the
+    task type isn't daily. Any status counts as covered: a done instance means
+    today's work is finished, and an open one means it's already waiting.
+    """
+    if task_type.default_interval_days != DAILY_INTERVAL_DAYS:
+        return None
+
+    today = today_local()
+    existing = (
+        db.query(TaskInstance)
+        .filter(
+            TaskInstance.task_type_id == task_type.id,
+            TaskInstance.due_date == today,
+        )
+        .first()
+    )
+    if existing is not None:
+        return None
+
+    instance = TaskInstance(task_type_id=task_type.id, due_date=today, status=TaskStatus.pending)
+    db.add(instance)
+    return instance
+
+
+def ensure_daily_instances(db: Session) -> list[TaskInstance]:
+    """Morning job: every daily task type gets today's instance without a
+    supervisor scheduling it.
+
+    Deliberately does not care whether yesterday's run is still waiting for
+    review -- an operator's morning checks must not be blocked on a supervisor
+    clearing their review queue. Only interval=1 types are auto-created;
+    weekly/monthly PM keeps its one-open-instance-until-approved behavior so
+    a missed month doesn't pile up 30 identical rows.
+    """
+    task_types = db.query(TaskType).filter(TaskType.default_interval_days == DAILY_INTERVAL_DAYS).all()
+    created = [instance for tt in task_types if (instance := ensure_daily_instance(db, tt)) is not None]
+    db.commit()
+    return created
 
 
 def apply_checklist_results(
@@ -287,4 +333,10 @@ def reopen_task_instance(db: Session, task_instance: TaskInstance) -> TaskInstan
     task_instance.reviewed_by = None
     task_instance.reviewed_at = None
     task_instance.review_notes = None
+
+    # The successor just deleted may have been today's row for a daily task.
+    # Put it back so reopening yesterday's work doesn't leave the operator
+    # with nothing to do until tomorrow morning's job runs.
+    db.flush()
+    ensure_daily_instance(db, task_instance.task_type)
     return task_instance

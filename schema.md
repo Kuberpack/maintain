@@ -11,6 +11,7 @@ Draft only — subject to change once Phase 1 begins.
 | email | text | for alerts |
 | whatsapp_number | text | for alerts |
 | created_at | timestamptz | |
+| created_by_id | uuid, FK → users.id, nullable | which supervisor/admin added this person. SET NULL on creator delete. |
 
 ## `machines`
 | column | type | notes |
@@ -120,10 +121,64 @@ Shift note on a machine so the next operator is not blind.
 | reported_at | timestamptz | |
 | reported_by | uuid, FK → users.id | |
 | issue_description | text | |
+| impact | text, nullable | what this stops if unfixed. Required on new reports; null only on rows logged before the column existed. |
 | downtime_minutes | int | |
 | resolved_at | timestamptz | null until resolved |
 | resolved_by | uuid, FK → users.id | |
 | resolution_notes | text | |
+
+## `vendor_contacts`
+Outside people to call when something is mechanically wrong. Readable by every role including operators; only supervisor/admin maintain it.
+
+| column | type | notes |
+|---|---|---|
+| id | uuid, PK | |
+| name | text | |
+| company | text, nullable | |
+| specialty | enum | mechanical / electrical / hydraulics / oem / other |
+| phone_number | text | |
+| whatsapp_number | text, nullable | |
+| notes | text, nullable | |
+| machine_id | uuid, FK → machines.id, nullable | null = plant-wide, callable for any machine |
+| created_at | timestamptz | |
+
+## `user_audit_events`
+Who let someone in and who removed them. Names and roles are text snapshots, not joins: a hard-deleted user has no row left to join to, and the trail has to outlive the account it records.
+
+| column | type | notes |
+|---|---|---|
+| id | uuid, PK | |
+| action | enum | created / deleted |
+| actor_id | uuid, FK → users.id, nullable | SET NULL |
+| actor_name | text | snapshot |
+| actor_role | enum | snapshot, reuses `user_role` |
+| target_user_id | uuid, FK → users.id, nullable | SET NULL — goes null on the delete it records |
+| target_name | text | snapshot |
+| target_role | enum | snapshot, reuses `user_role` |
+| at | timestamptz | |
+
+## `shift_logs`
+The paper "Machine Start & End Time" sheet: one row per machine per plant day. Production data, deliberately separate from the corrugator's "Shift parameter log" PM checklist (pressures/temperatures), which stays a `task_type` with `checklist_items`.
+
+| column | type | notes |
+|---|---|---|
+| id | uuid, PK | |
+| machine_id | uuid, FK → machines.id | CASCADE |
+| log_date | date | local (Sonipat) calendar day |
+| start_time | time, nullable | local wall clock, as written on the sheet |
+| end_time | time, nullable | earlier than start means the shift ran past midnight |
+| output_qty | float, nullable | |
+| output_unit | enum | kg / pcs — kg for board line, pcs for converting |
+| job_change_count | int, nullable | |
+| wastage_boardline | float, nullable | same unit as output |
+| wastage_machine | float, nullable | same unit as output |
+| delay_reason | text, nullable | the sheet's "Reason of Delay" |
+| delay_minutes | int, nullable | for totals |
+| created_by | uuid, FK → users.id, nullable | |
+| created_at | timestamptz | |
+| updated_at | timestamptz | operators re-save the row through the shift |
+
+Unique on `(machine_id, log_date)` — saving is an upsert, since a second save is a correction rather than a new record. `running_minutes` is derived from start/end (not stored) so the API and the insights view can't disagree about a past-midnight shift. Operators may only write today's row; correcting an earlier day is supervisor/admin.
 
 ## Relationships
 - `machines` 1—N `task_types` 1—N `task_instances`
@@ -132,4 +187,7 @@ Shift note on a machine so the next operator is not blind.
 - `machines` 1—N `part_replacements`
 - `machines` 1—N `repair_logs`
 - `machines` 1—N `handover_notes`
+- `machines` 1—N `shift_logs` (at most one per `log_date`)
+- `machines` 1—N `vendor_contacts` (plus plant-wide contacts with no machine)
+- `users` 1—N `users` (`created_by_id`), 1—N `user_audit_events` (as actor or target)
 - `users` 1—N `task_instances` (as completer/rescheduler/reviewer), `part_replacements`, `repair_logs`, `handover_notes`

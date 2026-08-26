@@ -199,7 +199,10 @@ export function MachineDetailPage() {
           <p className="font-semibold text-red-800">{hi.repairOpen}</p>
           <ul className="mt-1 text-sm text-red-700">
             {openRepairs.map((log) => (
-              <li key={log.id}>{log.issueDescription}</li>
+              <li key={log.id}>
+                {log.issueDescription}
+                {log.impact ? ` — ${log.impact}` : ''}
+              </li>
             ))}
           </ul>
         </div>
@@ -393,7 +396,13 @@ export function MachineDetailPage() {
                       <span className="font-medium">Repair:</span> {entry.log.issueDescription}{' '}
                       <span className="text-slate-400">
                         · {entry.log.reportedAt.slice(0, 10)} · {entry.log.resolvedAt ? 'resolved' : 'open'}
+                        {entry.log.reportedBy && userById.get(entry.log.reportedBy)
+                          ? ` · ${userById.get(entry.log.reportedBy)?.name}`
+                          : ''}
                       </span>
+                      {entry.log.impact && (
+                        <span className="mt-0.5 block text-sm text-slate-600">Causes: {entry.log.impact}</span>
+                      )}
                     </p>
                     {canManageSetup && !entry.log.resolvedAt && (
                       <ResolveRepairLogForm repairLogId={entry.log.id} onResolved={() => void repairLogs.refetch()} />

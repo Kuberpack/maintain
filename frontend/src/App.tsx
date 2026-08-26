@@ -14,6 +14,8 @@ import { MyProfilePage } from './pages/MyProfilePage'
 import { TodayPage } from './pages/TodayPage'
 import { ReviewPage } from './pages/ReviewPage'
 import { WeeklyReportPage } from './pages/WeeklyReportPage'
+import { DirectoryPage } from './pages/DirectoryPage'
+import { ShiftLogsPage } from './pages/ShiftLogsPage'
 
 function Layout() {
   return (
@@ -51,10 +53,12 @@ function AppRoutes() {
           <Route path="/today" element={<TodayPage />} />
           <Route path="/machines/:id" element={<MachineDetailPage />} />
           <Route path="/profile" element={<MyProfilePage />} />
+          <Route path="/directory" element={<DirectoryPage />} />
           <Route element={<RoleRoute roles={['admin', 'supervisor']} />}>
             <Route path="/review" element={<ReviewPage />} />
           </Route>
           <Route element={<RoleRoute roles={['admin', 'supervisor', 'management']} />}>
+            <Route path="/shift" element={<ShiftLogsPage />} />
             <Route path="/overdue" element={<OverduePage />} />
             <Route path="/summary" element={<SummaryPage />} />
             <Route path="/reports" element={<WeeklyReportPage />} />

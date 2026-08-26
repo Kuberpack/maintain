@@ -1,9 +1,10 @@
 import enum
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, Time, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -65,6 +66,24 @@ class ExceptionLevel(str, enum.Enum):
     critical = "critical"
 
 
+class VendorSpecialty(str, enum.Enum):
+    mechanical = "mechanical"
+    electrical = "electrical"
+    hydraulics = "hydraulics"
+    oem = "oem"
+    other = "other"
+
+
+class UserAuditAction(str, enum.Enum):
+    created = "created"
+    deleted = "deleted"
+
+
+class OutputUnit(str, enum.Enum):
+    kg = "kg"
+    pcs = "pcs"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -84,6 +103,16 @@ class User(Base):
     pin_hash: Mapped[str | None] = mapped_column(String(255))
     password_hash: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Which supervisor/admin let this person in. SET NULL rather than RESTRICT:
+    # losing the creator's account shouldn't block deleting them, and
+    # user_audit_events keeps a name snapshot that survives either delete.
+    # Deliberately a bare column, no relationship: every other User-side
+    # relationship needs passive_deletes=True to keep the database in charge of
+    # FK behavior (see the note above), and nothing reads the creator through
+    # the ORM -- the staff directory already has every user loaded by id.
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
 
     # passive_deletes=True on all five: without it, SQLAlchemy's default
     # ORM-level delete behavior loads these collections and proactively sets
@@ -112,6 +141,9 @@ class User(Base):
     handover_notes: Mapped[list["HandoverNote"]] = relationship(
         foreign_keys="HandoverNote.created_by", back_populates="created_by_user", passive_deletes=True
     )
+    shift_logs: Mapped[list["ShiftLog"]] = relationship(
+        foreign_keys="ShiftLog.created_by", back_populates="created_by_user", passive_deletes=True
+    )
     assigned_machine: Mapped["Machine | None"] = relationship(
         back_populates="operator", uselist=False, foreign_keys="Machine.operator_id"
     )
@@ -136,6 +168,10 @@ class Machine(Base):
     )
     repair_logs: Mapped[list["RepairLog"]] = relationship(back_populates="machine", cascade="all, delete-orphan")
     handover_notes: Mapped[list["HandoverNote"]] = relationship(back_populates="machine", cascade="all, delete-orphan")
+    shift_logs: Mapped[list["ShiftLog"]] = relationship(back_populates="machine", cascade="all, delete-orphan")
+    vendor_contacts: Mapped[list["VendorContact"]] = relationship(
+        back_populates="machine", cascade="all, delete-orphan"
+    )
 
 
 class TaskType(Base):
@@ -281,6 +317,10 @@ class RepairLog(Base):
     reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     reported_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     issue_description: Mapped[str] = mapped_column(Text)
+    # What this will cause if it isn't fixed -- required on new reports so the
+    # supervisor can triage without walking to the machine. Nullable in the DB
+    # only because rows logged before this column existed have no answer.
+    impact: Mapped[str | None] = mapped_column(Text)
     downtime_minutes: Mapped[int | None] = mapped_column(Integer)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
@@ -310,3 +350,103 @@ class HandoverNote(Base):
     created_by_user: Mapped["User | None"] = relationship(
         foreign_keys=[created_by], back_populates="handover_notes"
     )
+
+
+class VendorContact(Base):
+    """Someone outside the company to call when a machine breaks."""
+
+    __tablename__ = "vendor_contacts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255))
+    company: Mapped[str | None] = mapped_column(String(255))
+    specialty: Mapped[VendorSpecialty] = mapped_column(SAEnum(VendorSpecialty, name="vendor_specialty"))
+    phone_number: Mapped[str] = mapped_column(String(20))
+    whatsapp_number: Mapped[str | None] = mapped_column(String(20))
+    notes: Mapped[str | None] = mapped_column(Text)
+    # Null means plant-wide (any machine), not "unknown".
+    machine_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("machines.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    machine: Mapped["Machine | None"] = relationship(back_populates="vendor_contacts")
+
+
+class UserAuditEvent(Base):
+    """Who let someone in, and who removed them.
+
+    Names and roles are snapshotted as text because a hard-deleted user has
+    no row left to join to -- the point of this table is that the trail
+    survives the delete it records.
+    """
+
+    __tablename__ = "user_audit_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    action: Mapped[UserAuditAction] = mapped_column(SAEnum(UserAuditAction, name="user_audit_action"))
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    actor_name: Mapped[str] = mapped_column(String(255))
+    # users.role owns the user_role type; these columns reuse it, so they must
+    # not try to create it (create_type=False is only honored by the
+    # postgresql ENUM, not the generic sa.Enum).
+    actor_role: Mapped[UserRole] = mapped_column(PGEnum(UserRole, name="user_role", create_type=False))
+    target_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    target_name: Mapped[str] = mapped_column(String(255))
+    target_role: Mapped[UserRole] = mapped_column(PGEnum(UserRole, name="user_role", create_type=False))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ShiftLog(Base):
+    """One row per machine per plant day -- the paper "Machine Start & End
+    Time" sheet. Production data, deliberately separate from the corrugator's
+    "Shift parameter log" PM checklist (pressures/temperatures)."""
+
+    __tablename__ = "shift_logs"
+    __table_args__ = (UniqueConstraint("machine_id", "log_date", name="uq_shift_logs_machine_date"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    machine_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("machines.id", ondelete="CASCADE")
+    )
+    log_date: Mapped[date] = mapped_column(Date)
+    # Local (Sonipat) wall-clock times as written on the sheet. A shift that
+    # runs past midnight is handled when running hours are computed.
+    start_time: Mapped[time | None] = mapped_column(Time)
+    end_time: Mapped[time | None] = mapped_column(Time)
+    output_qty: Mapped[float | None] = mapped_column(Float)
+    output_unit: Mapped[OutputUnit] = mapped_column(
+        SAEnum(OutputUnit, name="output_unit"), default=OutputUnit.kg, server_default=OutputUnit.kg.value
+    )
+    job_change_count: Mapped[int | None] = mapped_column(Integer)
+    wastage_boardline: Mapped[float | None] = mapped_column(Float)
+    wastage_machine: Mapped[float | None] = mapped_column(Float)
+    delay_reason: Mapped[str | None] = mapped_column(Text)
+    delay_minutes: Mapped[int | None] = mapped_column(Integer)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    machine: Mapped["Machine"] = relationship(back_populates="shift_logs")
+    created_by_user: Mapped["User | None"] = relationship(foreign_keys=[created_by], back_populates="shift_logs")
+
+    @property
+    def running_minutes(self) -> int | None:
+        """Total running time from the two wall-clock times on the sheet.
+
+        A shift that ends earlier than it started ran past midnight (e.g.
+        21:00 to 05:30), so it wraps to the next day rather than going
+        negative. Exposed as a property so both the API and the insights view
+        read one implementation.
+        """
+        if self.start_time is None or self.end_time is None:
+            return None
+        start = self.start_time.hour * 60 + self.start_time.minute
+        end = self.end_time.hour * 60 + self.end_time.minute
+        return end - start if end >= start else end - start + 24 * 60

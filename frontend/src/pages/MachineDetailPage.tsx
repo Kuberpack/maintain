@@ -41,6 +41,8 @@ export function MachineDetailPage() {
   const { user } = useAuth()
   const canDoFloorWork = user?.role === 'operator' || user?.role === 'supervisor' || user?.role === 'admin'
   const canManageSetup = user?.role === 'supervisor' || user?.role === 'admin'
+  const canEditMachine = user?.role === 'admin'
+  const canSeeSupervisor = user?.role === 'admin' || user?.role === 'management'
   const canListUsers = user?.role === 'admin' || user?.role === 'supervisor' || user?.role === 'management'
 
   const machine = useAsync(() => getMachine(machineId), [machineId])
@@ -108,7 +110,7 @@ export function MachineDetailPage() {
     setDeletingMachine(true)
     try {
       await deleteMachine(machineId)
-      navigate('/')
+      navigate('/machines')
     } catch (err) {
       setDeleteError(err instanceof ApiError ? err.message : 'Could not delete machine')
       setDeletingMachine(false)
@@ -176,13 +178,15 @@ export function MachineDetailPage() {
           <p className={`mt-1 text-sm ${machineData.operator ? 'text-slate-600' : 'font-medium text-amber-700'}`}>
             {machineData.operator ? `Operator: ${machineData.operator.name}` : 'No operator assigned'}
           </p>
-          <p className={`text-sm ${machineData.supervisor ? 'text-slate-600' : 'text-slate-500'}`}>
-            {machineData.supervisor
-              ? `Supervisor: ${machineData.supervisor.name}`
-              : 'No dedicated supervisor'}
-          </p>
+          {canSeeSupervisor && (
+            <p className={`text-sm ${machineData.supervisor ? 'text-slate-600' : 'text-slate-500'}`}>
+              {machineData.supervisor
+                ? `Supervisor: ${machineData.supervisor.name}`
+                : 'No dedicated supervisor'}
+            </p>
+          )}
         </div>
-        {canManageSetup && (
+        {canEditMachine && (
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <EditMachineForm machine={machineData} onSaved={() => void machine.refetch()} />
             <button

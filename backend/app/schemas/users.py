@@ -15,6 +15,7 @@ class UserCreate(CamelModel):
     whatsapp_number: str | None = None
     pin: str | None = Field(default=None, pattern=r"^\d{4,6}$")
     password: str | None = Field(default=None, min_length=8)
+    can_assign_operators: bool = False
 
     @model_validator(mode="after")
     def _check_credential_matches_role(self) -> "UserCreate":
@@ -43,6 +44,7 @@ class UserUpdate(CamelModel):
     whatsapp_number: str | None = None
     pin: str | None = Field(default=None, pattern=r"^\d{4,6}$")
     password: str | None = Field(default=None, min_length=8)
+    can_assign_operators: bool | None = None
     # Role/credential consistency is re-checked in the router after merging
     # with the existing row (a PATCH may only touch one of role/pin/password).
 
@@ -56,6 +58,7 @@ class UserPublic(CamelModel):
     whatsapp_number: str | None
     created_at: datetime
     created_by_id: uuid.UUID | None
+    can_assign_operators: bool = False
 
 
 class UserAuditEventPublic(CamelModel):

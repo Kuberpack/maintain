@@ -15,6 +15,7 @@ interface EditUserFormProps {
   allowedRoles: UserRole[]
   onSaved: () => void
   onCancel: () => void
+  canToggleAssignOperators?: boolean
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -32,7 +33,14 @@ function credentialFamily(role: UserRole): 'pin' | 'password' {
   return role === 'management' ? 'password' : 'pin'
 }
 
-export function EditUserForm({ user, isSelf, allowedRoles, onSaved, onCancel }: EditUserFormProps) {
+export function EditUserForm({
+  user,
+  isSelf,
+  allowedRoles,
+  onSaved,
+  onCancel,
+  canToggleAssignOperators = false,
+}: EditUserFormProps) {
   const [name, setName] = useState(user.name)
   const [role, setRole] = useState<UserRole>(user.role)
   const [phoneNumber, setPhoneNumber] = useState(user.phoneNumber ?? '')
@@ -40,6 +48,7 @@ export function EditUserForm({ user, isSelf, allowedRoles, onSaved, onCancel }: 
   const [whatsappNumber, setWhatsappNumber] = useState(user.whatsappNumber ?? '')
   const [pin, setPin] = useState('')
   const [password, setPassword] = useState('')
+  const [canAssignOperators, setCanAssignOperators] = useState(user.canAssignOperators)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,6 +74,7 @@ export function EditUserForm({ user, isSelf, allowedRoles, onSaved, onCancel }: 
         whatsappNumber: whatsappNumber || undefined,
         pin: !isManagement && pin ? pin : undefined,
         password: isManagement && password ? password : undefined,
+        canAssignOperators: canToggleAssignOperators ? role === 'supervisor' && canAssignOperators : undefined,
       })
       onSaved()
     } catch (err) {
@@ -183,6 +193,22 @@ export function EditUserForm({ user, isSelf, allowedRoles, onSaved, onCancel }: 
             className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
             autoComplete="new-password"
           />
+        </label>
+      )}
+      {canToggleAssignOperators && role === 'supervisor' && (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={canAssignOperators}
+            onChange={(e) => setCanAssignOperators(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            <span className="font-medium text-slate-700">Can assign operators</span>
+            <span className="block text-slate-500">
+              Only one supervisor at a time. Turns it off for anyone else who currently has it.
+            </span>
+          </span>
         </label>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}

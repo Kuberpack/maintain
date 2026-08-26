@@ -13,6 +13,7 @@ export interface User {
   whatsappNumber: string | null
   createdAt: string
   createdById: string | null
+  canAssignOperators: boolean
 }
 
 export type UserAuditAction = 'created' | 'deleted'

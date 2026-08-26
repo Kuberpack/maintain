@@ -63,6 +63,10 @@ export function MachineListPage() {
   const machineNameById = new Map(machineList.map((m) => [m.id, m.name]))
   const taskTypeToMachine = new Map(taskTypeList.map((tt) => [tt.id, tt.machineId]))
   const sections = groupedSections(machineList)
+  const canAssignOperators = user?.role === 'admin' || Boolean(user?.canAssignOperators)
+  const canAssignSupervisors = user?.role === 'admin' || user?.role === 'management'
+  const canCreateMachine = user?.role === 'admin'
+  const canSeeSupervisor = user?.role === 'admin' || user?.role === 'management'
 
   return (
     <div className="mx-auto max-w-5xl p-4">
@@ -88,12 +92,20 @@ export function MachineListPage() {
         </div>
       )}
 
-      {(user?.role === 'supervisor' || user?.role === 'admin') && (
-        <>
-          <AssignOperatorsBoard machines={machineList} onSaved={() => void machines.refetch()} />
-          <AssignSupervisorsBoard machines={machineList} onSaved={() => void machines.refetch()} />
-          <CreateMachineForm onCreated={() => void machines.refetch()} />
-        </>
+      {canAssignOperators && (
+        <AssignOperatorsBoard machines={machineList} onSaved={() => void machines.refetch()} />
+      )}
+      {canAssignSupervisors && (
+        <AssignSupervisorsBoard machines={machineList} onSaved={() => void machines.refetch()} />
+      )}
+      {canCreateMachine && <CreateMachineForm onCreated={() => void machines.refetch()} />}
+
+      {machineList.length === 0 && (
+        <p className="text-sm text-slate-500">
+          {user?.role === 'supervisor'
+            ? 'No machines dedicated to you yet.'
+            : 'No machines yet.'}
+        </p>
       )}
 
       {sections.map((section) => (
@@ -127,11 +139,13 @@ export function MachineListPage() {
                     <p className={`mt-1 text-sm ${machine.operator ? 'text-slate-600' : 'font-medium text-amber-700'}`}>
                       {machine.operator ? `${t.assignedOperator}: ${machine.operator.name}` : t.noOperator}
                     </p>
-                    <p className={`text-sm ${machine.supervisor ? 'text-slate-600' : 'text-slate-500'}`}>
-                      {machine.supervisor
-                        ? `${t.assignedSupervisor}: ${machine.supervisor.name}`
-                        : t.noSupervisor}
-                    </p>
+                    {canSeeSupervisor && (
+                      <p className={`text-sm ${machine.supervisor ? 'text-slate-600' : 'text-slate-500'}`}>
+                        {machine.supervisor
+                          ? `${t.assignedSupervisor}: ${machine.supervisor.name}`
+                          : t.noSupervisor}
+                      </p>
+                    )}
                   </div>
                   <StatusBadge status={status} />
                 </Link>

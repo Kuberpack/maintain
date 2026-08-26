@@ -34,7 +34,7 @@ function HomePage() {
   if (user?.role === 'management') {
     return <Navigate to="/summary" replace />
   }
-  return <MachineListPage />
+  return <Navigate to="/machines" replace />
 }
 
 function AppRoutes() {
@@ -50,6 +50,7 @@ function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/machines" element={<MachineListPage />} />
           <Route path="/today" element={<TodayPage />} />
           <Route path="/machines/:id" element={<MachineDetailPage />} />
           <Route path="/profile" element={<MyProfilePage />} />

@@ -183,13 +183,14 @@ def run_seed() -> None:
         users_by_phone: dict[str, User] = {}
         pin_rows: list[tuple[str, str, str, str]] = []
         for u in USERS:
-            pin = random_pin()
+            pin = "1234" if u.get("can_assign_operators") else random_pin()
             user = User(
                 name=u["name"],
                 role=u["role"],
                 phone_number=u["phone_number"],
                 whatsapp_number=u["phone_number"],
                 pin_hash=hash_secret(pin),
+                can_assign_operators=bool(u.get("can_assign_operators")),
             )
             db.add(user)
             users_by_phone[u["phone_number"]] = user

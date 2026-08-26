@@ -107,6 +107,10 @@ class User(Base):
     # auth service, not a DB constraint, per "keep it simple."
     pin_hash: Mapped[str | None] = mapped_column(String(255))
     password_hash: Mapped[str | None] = mapped_column(String(255))
+    # At most one supervisor should have this True (enforced in the users
+    # router). That person assigns operators plant-wide; other supervisors
+    # only see units dedicated to them.
+    can_assign_operators: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # Which supervisor/admin let this person in. SET NULL rather than RESTRICT:
     # losing the creator's account shouldn't block deleting them, and

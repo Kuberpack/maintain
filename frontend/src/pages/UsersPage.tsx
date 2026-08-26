@@ -18,6 +18,8 @@ export function UsersPage() {
   const canView =
     currentUser?.role === 'admin' || currentUser?.role === 'supervisor' || currentUser?.role === 'management'
   const canCreate = currentUser?.role === 'admin' || currentUser?.role === 'supervisor'
+  const canSeeSupervisorMapping = currentUser?.role === 'admin' || currentUser?.role === 'management'
+  const canToggleAssignOperators = currentUser?.role === 'admin'
   // What roles this viewer is allowed to assign when creating/editing someone
   // else -- admin manages anyone, a supervisor only ever operators. Matches
   // backend/app/routers/users.py::_check_can_manage_target exactly.
@@ -78,6 +80,7 @@ export function UsersPage() {
         (creating ? (
           <CreateUserForm
             allowedRoles={allowedRoles}
+            canToggleAssignOperators={canToggleAssignOperators}
             onCreated={() => {
               setCreating(false)
               void users.refetch()
@@ -105,6 +108,7 @@ export function UsersPage() {
                 user={u}
                 isSelf={false}
                 allowedRoles={allowedRoles}
+                canToggleAssignOperators={canToggleAssignOperators}
                 onSaved={() => {
                   setEditingId(null)
                   void users.refetch()
@@ -121,6 +125,7 @@ export function UsersPage() {
                   <p className="text-sm text-slate-500">
                     {u.role} · {u.role === 'management' ? (u.email ?? '—') : (u.phoneNumber ?? '—')}
                     {u.whatsappNumber ? ` · WA ${u.whatsappNumber}` : ''}
+                    {u.canAssignOperators && canSeeSupervisorMapping ? ' · assigns operators' : ''}
                     {u.role === 'operator'
                       ? ` · ${
                           machines.data
@@ -128,7 +133,7 @@ export function UsersPage() {
                             .map((m) => m.name)
                             .join(', ') || 'unassigned'
                         }`
-                      : u.role === 'supervisor'
+                      : u.role === 'supervisor' && canSeeSupervisorMapping
                         ? ` · ${
                             machines.data
                               ?.filter((m) => m.supervisorId === u.id)

@@ -37,6 +37,15 @@ USERS: list[dict] = [
     {"name": "Kaptan Dalal", "role": UserRole.supervisor, "phone_number": "8708783730"},
     {"name": "Ranjeet", "role": UserRole.supervisor, "phone_number": "9917932666"},
     {"name": "Pawan Nishad", "role": UserRole.supervisor, "phone_number": "9555198509"},
+    # Placeholder: the only supervisor who can assign operators. Change name
+    # and phone here (and on the Users page) when that person is decided.
+    # Login until then: phone 9000000001, PIN 1234.
+    {
+        "name": "Test Supervisor",
+        "role": UserRole.supervisor,
+        "phone_number": "9000000001",
+        "can_assign_operators": True,
+    },
 ]
 
 MACHINES: list[dict] = [

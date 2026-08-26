@@ -17,6 +17,7 @@ export function createUser(payload: {
   whatsappNumber?: string
   pin?: string
   password?: string
+  canAssignOperators?: boolean
 }): Promise<User> {
   return apiFetch<User>('/users', {
     method: 'POST',
@@ -34,6 +35,7 @@ export function updateUser(
     whatsappNumber?: string
     pin?: string
     password?: string
+    canAssignOperators?: boolean
   },
 ): Promise<User> {
   return apiFetch<User>(`/users/${id}`, {

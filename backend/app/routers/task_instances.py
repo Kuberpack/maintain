@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.access import operator_machine_ids, require_machine_access, require_task_instance_access
+from app.core.access import work_machine_ids, require_machine_access, require_task_instance_access, require_task_type_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
@@ -40,17 +40,14 @@ def list_task_instances(
     current_user: User = Depends(get_current_user),
 ) -> list[TaskInstance]:
     query = db.query(TaskInstance)
-    scoped_ids = operator_machine_ids(db, current_user)
-    if scoped_ids is not None:
+    scoped_ids = work_machine_ids(db, current_user)
+    if machine_id is not None:
+        require_machine_access(db, current_user, machine_id)
+        query = query.join(TaskType).filter(TaskType.machine_id == machine_id)
+    elif scoped_ids is not None:
         if not scoped_ids:
             return []
-        if machine_id is not None:
-            require_machine_access(db, current_user, machine_id)
-            query = query.join(TaskType).filter(TaskType.machine_id == machine_id)
-        else:
-            query = query.join(TaskType).filter(TaskType.machine_id.in_(scoped_ids))
-    elif machine_id is not None:
-        query = query.join(TaskType).filter(TaskType.machine_id == machine_id)
+        query = query.join(TaskType).filter(TaskType.machine_id.in_(scoped_ids))
     if status is not None:
         query = query.filter(TaskInstance.status == status)
     if review_status is not None:
@@ -82,9 +79,12 @@ def list_task_instance_checklist_results(
 
 @router.post("", response_model=TaskInstancePublic, status_code=201)
 def create_task_instance(
-    payload: TaskInstanceCreate, db: Session = Depends(get_db), _user=Depends(_manage_roles)
+    payload: TaskInstanceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_manage_roles),
 ) -> TaskInstance:
-    get_or_404(db, TaskType, payload.task_type_id, "Task type not found")
+    task_type = get_or_404(db, TaskType, payload.task_type_id, "Task type not found")
+    require_task_type_access(db, current_user, task_type)
     task_instance = TaskInstance(**payload.model_dump())
     db.add(task_instance)
     db.commit()
@@ -124,6 +124,7 @@ def approve_task_instance(
     current_user: User = Depends(_manage_roles),
 ) -> TaskInstanceMarkDoneResponse:
     task_instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    require_task_instance_access(db, current_user, task_instance)
     next_instance = approve_task_instance_service(db, task_instance, current_user.id)
     db.commit()
     db.refresh(task_instance)
@@ -140,6 +141,7 @@ def reject_task_instance(
     current_user: User = Depends(_manage_roles),
 ) -> TaskInstance:
     task_instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    require_task_instance_access(db, current_user, task_instance)
     operator_id = task_instance.completed_by
     reject_task_instance_service(db, task_instance, current_user.id, payload.notes)
     db.commit()
@@ -152,9 +154,10 @@ def reject_task_instance(
 def reopen_task_instance(
     task_instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _user: User = Depends(_manage_roles),
+    current_user: User = Depends(_manage_roles),
 ) -> TaskInstance:
     task_instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    require_task_instance_access(db, current_user, task_instance)
     reopen_task_instance_service(db, task_instance)
     db.commit()
     db.refresh(task_instance)
@@ -169,6 +172,7 @@ def reschedule_task_instance(
     current_user: User = Depends(_manage_roles),
 ) -> TaskInstance:
     task_instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    require_task_instance_access(db, current_user, task_instance)
     if task_instance.review_status == ReviewStatus.awaiting_review:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -186,8 +190,11 @@ def reschedule_task_instance(
 
 @router.delete("/{task_instance_id}", status_code=204)
 def delete_task_instance(
-    task_instance_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(_manage_roles)
+    task_instance_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_manage_roles),
 ) -> None:
     task_instance = get_or_404(db, TaskInstance, task_instance_id, "Task instance not found")
+    require_task_instance_access(db, current_user, task_instance)
     db.delete(task_instance)
     commit_or_409(db, "Cannot delete this task instance")

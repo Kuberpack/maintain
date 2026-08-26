@@ -12,6 +12,7 @@ Draft only — subject to change once Phase 1 begins.
 | whatsapp_number | text | for alerts |
 | created_at | timestamptz | |
 | created_by_id | uuid, FK → users.id, nullable | which supervisor/admin added this person. SET NULL on creator delete. |
+| can_assign_operators | boolean, default false | at most one supervisor. That person assigns operators plant-wide. Other supervisors only see units dedicated to them. |
 
 ## `machines`
 | column | type | notes |

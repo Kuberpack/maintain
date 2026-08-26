@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.access import operator_machine_ids, require_machine_access, require_task_type_access
+from app.core.access import work_machine_ids, require_machine_access, require_task_type_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
@@ -24,14 +24,14 @@ def list_task_types(
     current_user: User = Depends(get_current_user),
 ) -> list[TaskType]:
     query = db.query(TaskType)
-    scoped_ids = operator_machine_ids(db, current_user)
-    if scoped_ids is not None:
-        if not scoped_ids:
-            return []
-        query = query.filter(TaskType.machine_id.in_(scoped_ids))
+    scoped_ids = work_machine_ids(db, current_user)
     if machine_id is not None:
         require_machine_access(db, current_user, machine_id)
         query = query.filter(TaskType.machine_id == machine_id)
+    elif scoped_ids is not None:
+        if not scoped_ids:
+            return []
+        query = query.filter(TaskType.machine_id.in_(scoped_ids))
     return query.all()
 
 

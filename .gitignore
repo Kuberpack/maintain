@@ -39,6 +39,9 @@ pnpm-debug.log*
 # Uploaded files (local-disk photo storage)
 /backend/uploads/
 
+# Generated operator/supervisor PINs from seed (never commit)
+/backend/.plant_pins.txt
+
 # Editors / OS
 .vscode/
 .idea/

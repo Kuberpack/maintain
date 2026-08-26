@@ -29,6 +29,8 @@ export interface UserAuditEvent {
   at: string
 }
 
+export type MachineKind = 'production' | 'utility'
+
 export interface Machine {
   id: string
   name: string
@@ -36,6 +38,10 @@ export interface Machine {
   location: string | null
   operatorId: string | null
   operator: { id: string; name: string } | null
+  supervisorId: string | null
+  supervisor: { id: string; name: string } | null
+  groupName: string | null
+  kind: MachineKind
   createdAt: string
 }
 

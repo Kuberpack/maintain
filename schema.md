@@ -20,7 +20,10 @@ Draft only — subject to change once Phase 1 begins.
 | name | text | e.g. "Corrugator 1" |
 | type | text | e.g. corrugator, printer, folder-gluer, laminator, die-cutter |
 | location | text | plant/section |
-| operator_id | uuid, FK → users.id, unique, nullable | dedicated operator for this machine (1:1). SET NULL on user delete. |
+| operator_id | uuid, FK → users.id, nullable | dedicated operator for this unit. One person may own several rows. SET NULL on user delete. |
+| supervisor_id | uuid, FK → users.id, nullable | dedicated supervisor for this unit (reassignable). Null on plant equipment with no dedicated supervisor. SET NULL on user delete. |
+| group_name | text, nullable | display group, e.g. "Fully Automatic Corrugation Machine" |
+| kind | text | `production` or `utility` |
 | created_at | timestamptz | |
 
 ## `task_types`

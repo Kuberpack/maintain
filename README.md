@@ -55,10 +55,9 @@ npm run dev
 
 ## Seed data
 
-`backend/app/seed.py` wipes and reseeds the database with the 18 plant
-machines, preventive-maintenance checklists (full corrugation list plus
-generic templates for the rest), 6 users across all three roles, plus
-example repair logs and part replacements:
+`backend/app/seed.py` wipes and reseeds the database with the plant roster
+(32 units, real operator/supervisor phones, split FAC checklists, utility
+PM for compressors/DGs/etc.):
 
 ```bash
 cd backend
@@ -68,26 +67,24 @@ cd backend
 Do not run seed against a database that already has real floor history
 unless you have a backup — it deletes existing machines, tasks, and users.
 
-Dummy login credentials (all `@kuberpack.com` / phone numbers are fake):
+Operator and supervisor PINs are random. After seed, read
+`backend/.plant_pins.txt` (gitignored) and hand those out. Management login
+for local seed is still `priya.kapoor@kuberpack.com` / `ChangeMe123!`.
 
-| Name | Role | Phone | PIN | Email | Password |
-|---|---|---|---|---|---|
-| Ramesh Kumar | operator | 9812345001 | 1234 | | |
-| Suresh Yadav | operator | 9812345002 | 2345 | | |
-| Vikram Singh | operator | 9812345003 | 3456 | | |
-| Anita Sharma | supervisor | 9812345004 | 4567 | | |
-| Rajesh Verma | supervisor | 9812345005 | 5678 | | |
-| Priya Kapoor | management | | | priya.kapoor@kuberpack.com | ChangeMe123! |
+To refresh machines on a live DB without deleting existing accounts:
+
+```bash
+cd backend
+.venv/bin/python -m scripts.seed_plant_keep_users
+```
 
 ## Bootstrapping real data (no dummy accounts)
 
-For a real deployment, don't run `seed.py` -- it wipes and replaces
-everything with the dummy data above. Instead, create exactly one real
-admin or supervisor account with `backend/app/bootstrap_account.py`, then
-use that account to add real machines, task types, and staff through the
-app itself (machine/task-type creation and user management all require
-being logged in as at least a supervisor, so this one account is what
-unblocks everything else):
+For a real deployment, don't run `seed.py` -- it wipes everything. Either
+run `scripts.seed_plant_keep_users` after migrate (keeps admin/management,
+upserts the roster by phone) or create exactly one real admin or
+supervisor account with `backend/app/bootstrap_account.py`, then add the
+rest through the app:
 
 ```bash
 docker compose exec backend python -m app.bootstrap_account

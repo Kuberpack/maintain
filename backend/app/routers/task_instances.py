@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.access import assigned_machine, require_machine_access, require_task_instance_access
+from app.core.access import operator_machine_ids, require_machine_access, require_task_instance_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
@@ -25,7 +25,9 @@ from app.services.scheduling import submit_task_instance
 
 router = APIRouter(prefix="/task-instances", tags=["task_instances"])
 
-_do_work_roles = require_roles(UserRole.operator, UserRole.supervisor, UserRole.admin)
+# Floor work is the operator's job. Supervisors assign and review; they do not
+# submit checklists. Admin stays as a break-glass for when an operator is out.
+_do_work_roles = require_roles(UserRole.operator, UserRole.admin)
 _manage_roles = require_roles(UserRole.supervisor, UserRole.admin)
 
 
@@ -38,13 +40,15 @@ def list_task_instances(
     current_user: User = Depends(get_current_user),
 ) -> list[TaskInstance]:
     query = db.query(TaskInstance)
-    if current_user.role == UserRole.operator:
-        mine = assigned_machine(db, current_user)
-        if mine is None:
+    scoped_ids = operator_machine_ids(db, current_user)
+    if scoped_ids is not None:
+        if not scoped_ids:
             return []
-        query = query.join(TaskType).filter(TaskType.machine_id == mine.id)
         if machine_id is not None:
             require_machine_access(db, current_user, machine_id)
+            query = query.join(TaskType).filter(TaskType.machine_id == machine_id)
+        else:
+            query = query.join(TaskType).filter(TaskType.machine_id.in_(scoped_ids))
     elif machine_id is not None:
         query = query.join(TaskType).filter(TaskType.machine_id == machine_id)
     if status is not None:

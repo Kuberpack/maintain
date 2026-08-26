@@ -3,11 +3,19 @@
 import uuid
 from sqlalchemy.orm import Session
 
-from app.models import ExceptionLevel, TaskInstance, User, UserRole
+from app.models import ExceptionLevel, Machine, TaskInstance, User, UserRole
 from app.services.alerts import notify_user
 
 
-def _supervisors(db: Session) -> list[User]:
+def supervisors_for_machine(db: Session, machine: Machine | None) -> list[User]:
+    """Dedicated supervisor + admins; all supervisors if the unit has none."""
+    admins = db.query(User).filter(User.role == UserRole.admin).all()
+    if machine is not None and machine.supervisor_id is not None:
+        dedicated = db.get(User, machine.supervisor_id)
+        recipients = list(admins)
+        if dedicated is not None:
+            recipients.append(dedicated)
+        return recipients
     return db.query(User).filter(User.role.in_((UserRole.supervisor, UserRole.admin))).all()
 
 
@@ -32,7 +40,7 @@ def notify_submission(db: Session, instance: TaskInstance) -> None:
     else:
         subject = "Work waiting for review"
         message = f"{label} was submitted and is waiting for review."
-    for user in _supervisors(db):
+    for user in supervisors_for_machine(db, instance.task_type.machine):
         notify_user(user, subject, message)
 
 
@@ -54,6 +62,7 @@ def notify_new_repair(
     issue: str,
     impact: str | None = None,
     reported_by_name: str | None = None,
+    machine: Machine | None = None,
 ) -> None:
     parts = [f"New repair on {machine_name}: {issue}"]
     if impact:
@@ -61,7 +70,7 @@ def notify_new_repair(
     if reported_by_name:
         parts.append(f"Reported by {reported_by_name}")
     message = ". ".join(parts)
-    for user in _supervisors(db):
+    for user in supervisors_for_machine(db, machine):
         notify_user(user, "New repair reported", message)
 
 
@@ -71,6 +80,7 @@ def notify_part_replacement(
     part_name: str,
     replaced_by_name: str | None = None,
     notes: str | None = None,
+    machine: Machine | None = None,
 ) -> None:
     """Operators log part swaps themselves, so the supervisor finds out from
     this message rather than from being asked for permission first."""
@@ -80,5 +90,5 @@ def notify_part_replacement(
     if replaced_by_name:
         parts.append(f"Logged by {replaced_by_name}")
     message = ". ".join(parts)
-    for user in _supervisors(db):
+    for user in supervisors_for_machine(db, machine):
         notify_user(user, "Part replacement logged", message)

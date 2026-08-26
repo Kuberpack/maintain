@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { updateMachine } from '../api/machines'
 import { listUsers } from '../api/users'
-import { listMachines } from '../api/machines'
 import { ApiError } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import type { Machine } from '../api/types'
@@ -18,10 +17,11 @@ export function EditMachineForm({ machine, onSaved }: EditMachineFormProps) {
   const [type, setType] = useState(machine.type)
   const [location, setLocation] = useState(machine.location ?? '')
   const [operatorId, setOperatorId] = useState(machine.operatorId ?? '')
+  const [supervisorId, setSupervisorId] = useState(machine.supervisorId ?? '')
+  const [kind, setKind] = useState(machine.kind)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const users = useAsync(() => listUsers(), [])
-  const machines = useAsync(() => listMachines(), [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -33,6 +33,8 @@ export function EditMachineForm({ machine, onSaved }: EditMachineFormProps) {
         type,
         location: location || undefined,
         operatorId: operatorId || null,
+        supervisorId: supervisorId || null,
+        kind,
       })
       setOpen(false)
       onSaved()
@@ -97,16 +99,39 @@ export function EditMachineForm({ machine, onSaved }: EditMachineFormProps) {
           <option value="">Unassigned</option>
           {(users.data ?? [])
             .filter((u) => u.role === 'operator')
-            .filter(
-              (u) =>
-                u.id === machine.operatorId ||
-                !(machines.data ?? []).some((m) => m.operatorId === u.id),
-            )
             .map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
               </option>
             ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium text-slate-700">Supervisor (optional)</span>
+        <select
+          value={supervisorId}
+          onChange={(e) => setSupervisorId(e.target.value)}
+          className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
+        >
+          <option value="">No dedicated supervisor</option>
+          {(users.data ?? [])
+            .filter((u) => u.role === 'supervisor' || u.role === 'admin')
+            .map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium text-slate-700">Kind</span>
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value as 'production' | 'utility')}
+          className="rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none"
+        >
+          <option value="production">Production machine</option>
+          <option value="utility">Plant equipment</option>
         </select>
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}

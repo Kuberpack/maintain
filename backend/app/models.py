@@ -84,6 +84,11 @@ class OutputUnit(str, enum.Enum):
     pcs = "pcs"
 
 
+class MachineKind(str, enum.Enum):
+    production = "production"
+    utility = "utility"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -144,8 +149,11 @@ class User(Base):
     shift_logs: Mapped[list["ShiftLog"]] = relationship(
         foreign_keys="ShiftLog.created_by", back_populates="created_by_user", passive_deletes=True
     )
-    assigned_machine: Mapped["Machine | None"] = relationship(
-        back_populates="operator", uselist=False, foreign_keys="Machine.operator_id"
+    assigned_machines: Mapped[list["Machine"]] = relationship(
+        back_populates="operator", foreign_keys="Machine.operator_id"
+    )
+    supervised_machines: Mapped[list["Machine"]] = relationship(
+        back_populates="supervisor", foreign_keys="Machine.supervisor_id"
     )
 
 
@@ -158,10 +166,16 @@ class Machine(Base):
     location: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     operator_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), unique=True
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
+    supervisor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    group_name: Mapped[str | None] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(20), default=MachineKind.production.value, server_default="production")
 
-    operator: Mapped["User | None"] = relationship(foreign_keys=[operator_id], back_populates="assigned_machine")
+    operator: Mapped["User | None"] = relationship(foreign_keys=[operator_id], back_populates="assigned_machines")
+    supervisor: Mapped["User | None"] = relationship(foreign_keys=[supervisor_id], back_populates="supervised_machines")
     task_types: Mapped[list["TaskType"]] = relationship(back_populates="machine", cascade="all, delete-orphan")
     part_replacements: Mapped[list["PartReplacement"]] = relationship(
         back_populates="machine", cascade="all, delete-orphan"

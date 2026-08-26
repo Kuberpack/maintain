@@ -1,87 +1,63 @@
 """Replace machines/PM data on an existing DB without deleting users.
 
+Upserts operators/supervisors from the plant roster by phone. Existing
+admin/management accounts are left alone. New people get a random PIN
+written to backend/.plant_pins.txt.
+
 Run on Railway: python -m scripts.seed_plant_keep_users
 """
 
-from datetime import timedelta
-
-from app.core.time import today_local
+from app.core.security import hash_secret
+from app.data.roster import USERS
 from app.database import SessionLocal
-from app.models import (
-    ChecklistItem,
-    ChecklistItemResult,
-    HandoverNote,
-    Machine,
-    PartReplacement,
-    RepairLog,
-    TaskCategory,
-    TaskInstance,
-    TaskType,
-    User,
-    UserRole,
-)
-from app.seed import DUE_DATE_OFFSETS, MACHINES, templates_for_machine
+from app.models import User
+from app.seed import create_machines_from_roster, random_pin, wipe_plant_data, write_pin_file
 
 
 def run() -> None:
     db = SessionLocal()
     try:
         print("Removing machines and PM data; keeping users...")
-        db.query(ChecklistItemResult).delete()
-        db.query(HandoverNote).delete()
-        db.query(TaskInstance).delete()
-        db.query(RepairLog).delete()
-        db.query(PartReplacement).delete()
-        db.query(ChecklistItem).delete()
-        db.query(TaskType).delete()
-        db.query(Machine).delete()
-        db.commit()
+        wipe_plant_data(db, users=False)
 
-        offsets = iter(DUE_DATE_OFFSETS)
-        seeded_task_types = 0
-        seeded_items = 0
-        seeded_instances = 0
-        operators = db.query(User).filter(User.role == UserRole.operator).order_by(User.name).all()
-        assigned = 0
-        for m in MACHINES:
-            machine = Machine(**m)
-            if assigned < len(operators):
-                machine.operator_id = operators[assigned].id
-                assigned += 1
-            db.add(machine)
+        users_by_phone: dict[str, User] = {
+            u.phone_number: u for u in db.query(User).filter(User.phone_number.isnot(None)).all() if u.phone_number
+        }
+        pin_rows: list[tuple[str, str, str, str]] = []
+        created = 0
+        for spec in USERS:
+            phone = spec["phone_number"]
+            existing = users_by_phone.get(phone)
+            if existing is not None:
+                existing.name = spec["name"]
+                existing.role = spec["role"]
+                existing.whatsapp_number = existing.whatsapp_number or phone
+                continue
+            pin = random_pin()
+            user = User(
+                name=spec["name"],
+                role=spec["role"],
+                phone_number=phone,
+                whatsapp_number=phone,
+                pin_hash=hash_secret(pin),
+            )
+            db.add(user)
             db.flush()
-            for template in templates_for_machine(m["name"]):
-                task_type = TaskType(
-                    machine_id=machine.id,
-                    category=TaskCategory.preventive,
-                    description=template["description"],
-                    default_interval_days=template["default_interval_days"],
-                )
-                db.add(task_type)
-                db.flush()
-                seeded_task_types += 1
-                for sort_order, spec in enumerate(template["items"]):
-                    db.add(
-                        ChecklistItem(
-                            task_type_id=task_type.id,
-                            section=spec["section"],
-                            sort_order=sort_order,
-                            description=spec["description"],
-                            requires_value=spec["requires_value"],
-                            value_unit=spec["value_unit"] or None,
-                            min_value=spec.get("min_value"),
-                            max_value=spec.get("max_value"),
-                        )
-                    )
-                    seeded_items += 1
-                due_date = today_local() + timedelta(days=next(offsets, 0))
-                db.add(TaskInstance(task_type_id=task_type.id, due_date=due_date))
-                seeded_instances += 1
+            users_by_phone[phone] = user
+            pin_rows.append((spec["name"], spec["role"].value, phone, pin))
+            created += 1
 
+        if pin_rows:
+            write_pin_file(pin_rows)
+            print(f"Created {created} users. PINs written for NEW accounts only.")
+        else:
+            print("All roster phones already had accounts; no new PINs.")
+
+        machines_by_name, task_types, items, instances = create_machines_from_roster(db, users_by_phone)
         db.commit()
         print(
-            f"Seeded {len(MACHINES)} machines, {seeded_task_types} PM types, "
-            f"{seeded_items} checklist items, {seeded_instances} due tasks. Users kept."
+            f"Seeded {len(machines_by_name)} machines, {task_types} PM types, "
+            f"{items} checklist items, {instances} due tasks. Users kept."
         )
     finally:
         db.close()

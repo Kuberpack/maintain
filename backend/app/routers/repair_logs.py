@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import assigned_machine, require_machine_access
+from app.core.access import operator_machine_ids, require_machine_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
@@ -27,11 +27,11 @@ def list_repair_logs(
     current_user: User = Depends(get_current_user),
 ) -> list[RepairLog]:
     query = db.query(RepairLog)
-    if current_user.role == UserRole.operator:
-        mine = assigned_machine(db, current_user)
-        if mine is None:
+    scoped_ids = operator_machine_ids(db, current_user)
+    if scoped_ids is not None:
+        if not scoped_ids:
             return []
-        query = query.filter(RepairLog.machine_id == mine.id)
+        query = query.filter(RepairLog.machine_id.in_(scoped_ids))
     elif machine_id is not None:
         query = query.filter(RepairLog.machine_id == machine_id)
     if unresolved_only:
@@ -66,6 +66,7 @@ def create_repair_log(
         repair_log.issue_description,
         repair_log.impact,
         current_user.name,
+        machine,
     )
     return repair_log
 

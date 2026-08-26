@@ -123,9 +123,19 @@ export function UsersPage() {
                     {u.whatsappNumber ? ` · WA ${u.whatsappNumber}` : ''}
                     {u.role === 'operator'
                       ? ` · ${
-                          machines.data?.find((m) => m.operatorId === u.id)?.name ?? 'unassigned'
+                          machines.data
+                            ?.filter((m) => m.operatorId === u.id)
+                            .map((m) => m.name)
+                            .join(', ') || 'unassigned'
                         }`
-                      : ''}
+                      : u.role === 'supervisor'
+                        ? ` · ${
+                            machines.data
+                              ?.filter((m) => m.supervisorId === u.id)
+                              .map((m) => m.name)
+                              .join(', ') || 'no dedicated machines'
+                          }`
+                        : ''}
                   </p>
                   <p className="text-xs text-slate-400">
                     {u.createdById

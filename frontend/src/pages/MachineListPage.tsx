@@ -8,8 +8,35 @@ import { getPublicConfig } from '../api/config'
 import { computeDisplayStatus, worstStatus } from '../lib/status'
 import { StatusBadge } from '../components/StatusBadge'
 import { CreateMachineForm } from '../components/CreateMachineForm'
+import { AssignOperatorsBoard } from '../components/AssignOperatorsBoard'
+import { AssignSupervisorsBoard } from '../components/AssignSupervisorsBoard'
 import { useAuth } from '../auth/useAuth'
 import { useLocale } from '../locale/localeContext'
+import type { Machine } from '../api/types'
+
+function groupedSections(machines: Machine[]): Array<{ title: string | null; items: Machine[] }> {
+  const groups = new Map<string, Machine[]>()
+  const ungrouped: Machine[] = []
+  const utilities: Machine[] = []
+  for (const machine of machines) {
+    if (machine.kind === 'utility' && !machine.groupName) {
+      utilities.push(machine)
+    } else if (machine.groupName) {
+      const list = groups.get(machine.groupName) ?? []
+      list.push(machine)
+      groups.set(machine.groupName, list)
+    } else {
+      ungrouped.push(machine)
+    }
+  }
+  const sections: Array<{ title: string | null; items: Machine[] }> = []
+  for (const [title, items] of groups) {
+    sections.push({ title, items })
+  }
+  if (ungrouped.length) sections.push({ title: null, items: ungrouped })
+  if (utilities.length) sections.push({ title: 'Plant equipment', items: utilities })
+  return sections
+}
 
 export function MachineListPage() {
   const { user } = useAuth()
@@ -34,15 +61,13 @@ export function MachineListPage() {
   const openRepairs = repairs.data ?? []
   const openRepairIds = new Set(openRepairs.map((r) => r.machineId))
   const machineNameById = new Map(machineList.map((m) => [m.id, m.name]))
-
   const taskTypeToMachine = new Map(taskTypeList.map((tt) => [tt.id, tt.machineId]))
+  const sections = groupedSections(machineList)
 
   return (
     <div className="mx-auto max-w-5xl p-4">
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Machines</h1>
 
-      {/* Operators log repairs and part swaps without asking first, so this is
-          where a supervisor finds out what broke and what it stops. */}
       {openRepairs.length > 0 && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4">
           <p className="font-semibold text-red-900">
@@ -64,40 +89,57 @@ export function MachineListPage() {
       )}
 
       {(user?.role === 'supervisor' || user?.role === 'admin') && (
-        <CreateMachineForm onCreated={() => void machines.refetch()} />
+        <>
+          <AssignOperatorsBoard machines={machineList} onSaved={() => void machines.refetch()} />
+          <AssignSupervisorsBoard machines={machineList} onSaved={() => void machines.refetch()} />
+          <CreateMachineForm onCreated={() => void machines.refetch()} />
+        </>
       )}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {machineList.map((machine) => {
-          const activeStatuses = taskInstanceList
-            .filter((ti) => taskTypeToMachine.get(ti.taskTypeId) === machine.id && ti.status !== 'done')
-            .map((ti) => computeDisplayStatus(ti.dueDate, ti.status, cfg.alertUpcomingDays, ti.reviewStatus))
-          const status = worstStatus(activeStatuses)
-          const hasRepair = openRepairIds.has(machine.id)
 
-          return (
-            <Link
-              key={machine.id}
-              to={`/machines/${machine.id}`}
-              className="flex items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow"
-            >
-              <div>
-                <h2 className="font-medium text-slate-900">{machine.name}</h2>
-                <p className="text-sm text-slate-500">
-                  {machine.type}
-                  {machine.location ? ` · ${machine.location}` : ''}
-                </p>
-                {hasRepair && <p className="mt-1 text-sm font-medium text-red-700">{t.repairOpen}</p>}
-                <p className={`mt-1 text-sm ${machine.operator ? 'text-slate-600' : 'font-medium text-amber-700'}`}>
-                  {machine.operator
-                    ? `${t.assignedOperator}: ${machine.operator.name}`
-                    : t.noOperator}
-                </p>
-              </div>
-              <StatusBadge status={status} />
-            </Link>
-          )
-        })}
-      </div>
+      {sections.map((section) => (
+        <section key={section.title ?? 'ungrouped'} className="mb-6">
+          {section.title && (
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              {section.title === 'Plant equipment' ? t.plantEquipment : section.title}
+            </h2>
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {section.items.map((machine) => {
+              const activeStatuses = taskInstanceList
+                .filter((ti) => taskTypeToMachine.get(ti.taskTypeId) === machine.id && ti.status !== 'done')
+                .map((ti) => computeDisplayStatus(ti.dueDate, ti.status, cfg.alertUpcomingDays, ti.reviewStatus))
+              const status = worstStatus(activeStatuses)
+              const hasRepair = openRepairIds.has(machine.id)
+
+              return (
+                <Link
+                  key={machine.id}
+                  to={`/machines/${machine.id}`}
+                  className="flex items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow"
+                >
+                  <div>
+                    <h2 className="font-medium text-slate-900">{machine.name}</h2>
+                    <p className="text-sm text-slate-500">
+                      {machine.type}
+                      {machine.location ? ` · ${machine.location}` : ''}
+                    </p>
+                    {hasRepair && <p className="mt-1 text-sm font-medium text-red-700">{t.repairOpen}</p>}
+                    <p className={`mt-1 text-sm ${machine.operator ? 'text-slate-600' : 'font-medium text-amber-700'}`}>
+                      {machine.operator ? `${t.assignedOperator}: ${machine.operator.name}` : t.noOperator}
+                    </p>
+                    <p className={`text-sm ${machine.supervisor ? 'text-slate-600' : 'text-slate-500'}`}>
+                      {machine.supervisor
+                        ? `${t.assignedSupervisor}: ${machine.supervisor.name}`
+                        : t.noSupervisor}
+                    </p>
+                  </div>
+                  <StatusBadge status={status} />
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   )
 }

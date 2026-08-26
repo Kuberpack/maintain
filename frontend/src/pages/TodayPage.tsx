@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAsync } from '../lib/useAsync'
 import { listMachines } from '../api/machines'
@@ -39,21 +39,30 @@ export function TodayPage() {
   const [photos, setPhotos] = useState<Record<string, File | null>>({})
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pickedMachineId, setPickedMachineId] = useState<string>('')
 
   const loading = machines.loading || taskTypes.loading || instances.loading || repairs.loading || config.loading
   const loadError = machines.error ?? taskTypes.error ?? instances.error ?? repairs.error ?? config.error
 
-  // The one machine this page's actions apply to. An operator only ever gets
-  // their assigned machine back from /machines, so there is no ambiguity for
-  // them; other roles have to say which machine via ?machine=.
+  useEffect(() => {
+    const list = machines.data ?? []
+    if (!list.length) return
+    setPickedMachineId((prev) => (list.some((m) => m.id === prev) ? prev : (list[0]?.id ?? '')))
+  }, [machines.data])
+
+  // Floor actions apply to one unit at a time. Operators with several units
+  // pick which one; ?machine= still wins for deep links.
   const actionMachine = useMemo(() => {
     const list = machines.data ?? []
     if (focusMachine) return list.find((m) => m.id === focusMachine) ?? null
-    if (user?.role === 'operator') return list[0] ?? null
+    if (user?.role === 'operator') return list.find((m) => m.id === pickedMachineId) ?? list[0] ?? null
     return null
-  }, [machines.data, focusMachine, user?.role])
+  }, [machines.data, focusMachine, user?.role, pickedMachineId])
 
-  const canDoFloorWork = user?.role === 'operator' || user?.role === 'supervisor' || user?.role === 'admin'
+  // Floor work (Start, repair, shift log) is the operator's job. Supervisors
+  // assign people and review submissions — they should not run the checklist.
+  const canRunTasks = user?.role === 'operator' || user?.role === 'admin'
+  const canDoFloorWork = user?.role === 'operator' || user?.role === 'admin'
 
   const cards = useMemo(() => {
     if (!machines.data || !taskTypes.data || !instances.data || !config.data) return []
@@ -133,6 +142,22 @@ export function TodayPage() {
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
             {t.myMachine}: {actionMachine.name}
           </h2>
+          {user?.role === 'operator' && (machines.data ?? []).length > 1 && !focusMachine && (
+            <label className="mb-3 flex flex-col gap-1 text-sm">
+              <span className="font-medium text-slate-700">{t.chooseMachine}</span>
+              <select
+                value={actionMachine.id}
+                onChange={(e) => setPickedMachineId(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2 text-base"
+              >
+                {(machines.data ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="flex flex-col gap-2">
             <ReportRepairForm large machineId={actionMachine.id} onReported={() => void repairs.refetch()} />
             <LogPartReplacementForm large machineId={actionMachine.id} onLogged={() => undefined} />
@@ -194,7 +219,28 @@ export function TodayPage() {
                   {t.rejectReason}: {ti.reviewNotes}
                 </p>
               )}
-              {isWaiting ? (
+              {!canRunTasks ? (
+                <div className="mt-2">
+                  <p className={`text-sm ${machine?.operator ? 'text-slate-600' : 'font-medium text-amber-700'}`}>
+                    {machine?.operator
+                      ? `${t.assignedOperator}: ${machine.operator.name}`
+                      : t.noOperator}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {user?.role === 'supervisor' || user?.role === 'admin' || user?.role === 'management'
+                      ? t.supervisorTodayHint
+                      : null}
+                  </p>
+                  {(user?.role === 'supervisor' || user?.role === 'admin') && (
+                    <Link
+                      to="/"
+                      className="mt-2 inline-block text-sm font-medium text-slate-800 underline"
+                    >
+                      {t.assignOperators}
+                    </Link>
+                  )}
+                </div>
+              ) : isWaiting ? (
                 <p className="text-base text-slate-500">{t.waiting}</p>
               ) : runningId === ti.id && taskType?.category === 'preventive' ? (
                 <ChecklistRunForm

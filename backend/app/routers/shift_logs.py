@@ -4,7 +4,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.access import assigned_machine, require_machine_access
+from app.core.access import operator_machine_ids, require_machine_access
 from app.core.deps import get_current_user, require_roles
 from app.core.time import today_local
 from app.core.utils import commit_or_409, get_or_404
@@ -38,11 +38,11 @@ def list_shift_logs(
     current_user: User = Depends(get_current_user),
 ) -> list[ShiftLog]:
     query = db.query(ShiftLog)
-    if current_user.role == UserRole.operator:
-        mine = assigned_machine(db, current_user)
-        if mine is None:
+    scoped_ids = operator_machine_ids(db, current_user)
+    if scoped_ids is not None:
+        if not scoped_ids:
             return []
-        query = query.filter(ShiftLog.machine_id == mine.id)
+        query = query.filter(ShiftLog.machine_id.in_(scoped_ids))
     elif machine_id is not None:
         query = query.filter(ShiftLog.machine_id == machine_id)
     if date_from is not None:

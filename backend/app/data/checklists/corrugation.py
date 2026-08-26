@@ -338,3 +338,70 @@ TEMPLATES: list[PmTemplate] = [
     {"description": "Annual Shutdown Maintenance", "default_interval_days": 365, "items": from_sections(ANNUAL)},
     {"description": "Shift parameter log", "default_interval_days": 1, "items": SHIFT_READINGS},
 ]
+
+
+def _daily(names: set[str]) -> list[tuple[str, list[str]]]:
+    return [section for section in DAILY if section[0] in names]
+
+
+SHORT_WEEKLY: list[tuple[str, list[str]]] = [
+    (
+        "Weekly Preventive Maintenance",
+        [
+            "Lubricate designated bearings according to OEM lubrication chart",
+            "Inspect all chains and sprockets",
+            "Check chain tension",
+            "Inspect timing/drive belts",
+            "Inspect couplings",
+            "Check gearbox oil leakage",
+            "Check pneumatic leakage",
+            "Clean electrical-panel filters",
+            "Inspect cooling fans",
+            "Check motor temperature",
+            "Check bearing temperature",
+            "Test emergency stops",
+            "Test guards and interlocks",
+        ],
+    ),
+]
+
+_LINE_DAILY = {
+    "Paper Reel Stand / Mill Roll Stand",
+    "Pre-Heater / Pre-Conditioner",
+    "Single Facer",
+    "Bridge / Web Handling System",
+}
+_PASTING_DAILY = {"Glue Machine", "Double Backer / Double Facer"}
+_NC_DAILY = {"Slitter Scorer", "NC Cut-Off", "Stacker / Delivery"}
+_GLUE_DAILY = {"Glue Machine"}
+
+# Full corrugator PM on the two single-facer units only.
+TEMPLATES_FAC_LINE: list[PmTemplate] = [
+    {"description": "Daily Preventive Maintenance", "default_interval_days": 1, "items": from_sections(_daily(_LINE_DAILY))},
+    {"description": "Weekly Preventive Maintenance", "default_interval_days": 7, "items": from_sections(WEEKLY)},
+    {"description": "Monthly Preventive Maintenance", "default_interval_days": 30, "items": from_sections(MONTHLY)},
+    {"description": "Quarterly Preventive Maintenance", "default_interval_days": 90, "items": from_sections(QUARTERLY)},
+    {
+        "description": "Half-Yearly Preventive Maintenance",
+        "default_interval_days": 180,
+        "items": from_sections(HALF_YEARLY),
+    },
+    {"description": "Annual Shutdown Maintenance", "default_interval_days": 365, "items": from_sections(ANNUAL)},
+    {"description": "Shift parameter log", "default_interval_days": 1, "items": SHIFT_READINGS},
+]
+
+TEMPLATES_FAC_PASTING: list[PmTemplate] = [
+    {"description": "Daily Preventive Maintenance", "default_interval_days": 1, "items": from_sections(_daily(_PASTING_DAILY))},
+    {"description": "Weekly Preventive Maintenance", "default_interval_days": 7, "items": from_sections(SHORT_WEEKLY)},
+]
+
+TEMPLATES_FAC_NC: list[PmTemplate] = [
+    {"description": "Daily Preventive Maintenance", "default_interval_days": 1, "items": from_sections(_daily(_NC_DAILY))},
+    {"description": "Weekly Preventive Maintenance", "default_interval_days": 7, "items": from_sections(SHORT_WEEKLY)},
+]
+
+TEMPLATES_FAC_GLUE: list[PmTemplate] = [
+    {"description": "Daily Preventive Maintenance", "default_interval_days": 1, "items": from_sections(_daily(_GLUE_DAILY))},
+    {"description": "Weekly Preventive Maintenance", "default_interval_days": 7, "items": from_sections(SHORT_WEEKLY)},
+]
+

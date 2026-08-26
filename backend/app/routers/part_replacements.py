@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import assigned_machine, require_machine_access
+from app.core.access import operator_machine_ids, require_machine_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
@@ -30,11 +30,11 @@ def list_part_replacements(
     current_user: User = Depends(get_current_user),
 ) -> list[PartReplacement]:
     query = db.query(PartReplacement)
-    if current_user.role == UserRole.operator:
-        mine = assigned_machine(db, current_user)
-        if mine is None:
+    scoped_ids = operator_machine_ids(db, current_user)
+    if scoped_ids is not None:
+        if not scoped_ids:
             return []
-        query = query.filter(PartReplacement.machine_id == mine.id)
+        query = query.filter(PartReplacement.machine_id.in_(scoped_ids))
     elif machine_id is not None:
         query = query.filter(PartReplacement.machine_id == machine_id)
     return query.order_by(PartReplacement.replaced_at.desc()).all()
@@ -65,6 +65,7 @@ def create_part_replacement(
         part_replacement.part_name,
         current_user.name,
         part_replacement.notes,
+        machine,
     )
     return part_replacement
 

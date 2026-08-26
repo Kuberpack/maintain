@@ -79,6 +79,17 @@ type Msg = {
   save: string
   cancel: string
   optional: string
+  assignOperators: string
+  assignOperatorsHint: string
+  assignSupervisors: string
+  assignSupervisorsHint: string
+  noSupervisor: string
+  assignedSupervisor: string
+  plantEquipment: string
+  chooseMachine: string
+  supervisorTodayHint: string
+  saveAssignments: string
+  assignmentsSaved: string
 }
 
 export const messages: Record<Locale, Msg> = {
@@ -161,6 +172,19 @@ export const messages: Record<Locale, Msg> = {
     save: 'Save',
     cancel: 'Cancel',
     optional: 'optional',
+    assignOperators: 'Assign operators',
+    assignOperatorsHint:
+      'One person can cover several units at the same time. Save the whole map in one go.',
+    assignSupervisors: 'Assign supervisors',
+    assignSupervisorsHint:
+      'Dedicated supervisor per machine. Leave blank for plant equipment. These can change later.',
+    noSupervisor: 'No dedicated supervisor',
+    assignedSupervisor: 'Supervisor',
+    plantEquipment: 'Plant equipment',
+    chooseMachine: 'Which machine',
+    supervisorTodayHint: 'Operators start this work on their machine. Your job is to assign people and review.',
+    saveAssignments: 'Save assignments',
+    assignmentsSaved: 'Assignments saved',
   },
   hi: {
     today: 'आज का काम',
@@ -241,6 +265,19 @@ export const messages: Record<Locale, Msg> = {
     save: 'सेव करें',
     cancel: 'रद्द करें',
     optional: 'ज़रूरी नहीं',
+    assignOperators: 'ऑपरेटर असाइन करें',
+    assignOperatorsHint:
+      'एक व्यक्ति एक साथ कई यूनिट देख सकता है। पूरा नक्शा एक बार में सेव करें।',
+    assignSupervisors: 'सुपरवाइज़र असाइन करें',
+    assignSupervisorsHint:
+      'हर मशीन का एक सुपरवाइज़र। प्लांट उपकरण खाली छोड़ें। बाद में बदला जा सकता है।',
+    noSupervisor: 'कोई समर्पित सुपरवाइज़र नहीं',
+    assignedSupervisor: 'सुपरवाइज़र',
+    plantEquipment: 'प्लांट उपकरण',
+    chooseMachine: 'कौन सी मशीन',
+    supervisorTodayHint: 'यह काम ऑपरेटर अपनी मशीन पर शुरू करेंगे। आपका काम असाइन करना और रिव्यू करना है।',
+    saveAssignments: 'असाइनमेंट सेव करें',
+    assignmentsSaved: 'असाइनमेंट सेव हो गए',
   },
 }
 

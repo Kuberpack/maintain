@@ -6,10 +6,17 @@ from sqlalchemy.orm import Session
 from app.models import Machine, TaskInstance, TaskType, User, UserRole
 
 
-def assigned_machine(db: Session, user: User) -> Machine | None:
+def assigned_machines(db: Session, user: User) -> list[Machine]:
+    if user.role != UserRole.operator:
+        return []
+    return db.query(Machine).filter(Machine.operator_id == user.id).order_by(Machine.name).all()
+
+
+def operator_machine_ids(db: Session, user: User) -> list[uuid.UUID] | None:
+    """None = not an operator (no scoping). Empty list = operator with no units."""
     if user.role != UserRole.operator:
         return None
-    return db.query(Machine).filter(Machine.operator_id == user.id).one_or_none()
+    return [machine.id for machine in assigned_machines(db, user)]
 
 
 def require_machine_access(db: Session, user: User, machine_id: uuid.UUID) -> Machine:
@@ -42,3 +49,13 @@ def validate_operator_id(db: Session, operator_id: uuid.UUID | None) -> None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Operator not found")
     if user.role != UserRole.operator:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Assigned user must be an operator")
+
+
+def validate_supervisor_id(db: Session, supervisor_id: uuid.UUID | None) -> None:
+    if supervisor_id is None:
+        return
+    user = db.get(User, supervisor_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Supervisor not found")
+    if user.role not in (UserRole.supervisor, UserRole.admin):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Assigned user must be a supervisor")

@@ -1,130 +1,180 @@
-# Machine Maintenance & Cleaning Tracker
+# Maintain — plant maintenance & cleaning tracker
 
-Internal tool for Kuberpack's Sonipat plant. See `CLAUDE.md`, `architecture.md`,
-`schema.md`, `todo.md` for context, design, and data model. For the real
-online deployment (Vercel + Railway) rather than local dev, see `DEPLOYMENT.md`.
+Internal operations app for Kuberpack’s Sonipat plant: schedule and complete machine cleaning/PM checklists, capture photo proof, escalate exceptions for supervisor review, and report overdue work.
 
-## Stack
+For the live online deployment (Vercel frontend + Railway backend), see `DEPLOYMENT.md`.
 
-- Backend: FastAPI (Python), SQLAlchemy, Alembic, PostgreSQL
-- Frontend: React + TypeScript (Vite), Tailwind CSS
-- Auth: JWT sessions — phone + PIN for operators/supervisors, email + password for management
-- Alerts: WhatsApp + email, stubbed until a BSP is chosen
+## Problem
 
-## Running with Docker Compose
+Corrugation and converting lines need recurring cleaning, oiling, and preventive checks. Paper checklists go missing, exceptions are verbal, and management lacks a live view of overdue or critical items. Maintain replaces that with role-led workflows (operator / supervisor / management), photo evidence, and review gates before a run counts as done.
+
+## Features
+
+- Role-based auth: phone + PIN for operators/supervisors; email + password for management
+- Machine registry with task types (cleaning, oiling, part replacement, repair, preventive)
+- Checklist items with optional numeric readings and min/max bands
+- Task instances with due dates, overdue tracking, photo + exception photo requirements
+- Supervisor review workflow (`awaiting_review` → approved/rejected) before recurrence advances
+- Supervisor machine scope and plant rotation assignment flows
+- Handover notes / shift logs per machine
+- Repair logs and part replacement records
+- Weekly/summary reporting views
+- Seed + plant roster scripts; separate bootstrap for first real admin/supervisor
+- Docker Compose (API, frontend, Postgres); Alembic migrations
+- Vercel API proxy so company Wi‑Fi does not need direct Railway access
+- Backup script (`scripts/backup.sh`) with retention pruning
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Op[Operator / Supervisor UI] --> FE[React + Vite + TS]
+  FE -->|JWT| API[FastAPI]
+  API --> PG[(PostgreSQL)]
+  API --> Sched[APScheduler-style jobs]
+  FE --> Photos[Photo upload endpoints]
+  Mgmt[Management UI] --> FE
+```
+
+Data model centrepiece is `task_instances` joined to `task_types` / `checklist_items` / `checklist_item_results`. Work is not `done` until `review_status=approved`; only then is the next recurring instance created. See `schema.md` and `architecture.md` for column-level detail.
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Backend | FastAPI, SQLAlchemy, Alembic, PostgreSQL |
+| Frontend | React + TypeScript (Vite), Tailwind CSS |
+| Auth | JWT sessions (dual credential styles by role) |
+| Alerts | WhatsApp + email hooks stubbed pending BSP choice |
+| Ops | Docker Compose, `pg_dump` backup script, Vercel + Railway |
+
+## Key engineering decisions
+
+1. **Review gate before recurrence.** Prevents rubber-stamp completions from advancing the schedule; supervisors must approve.
+2. **Photo proof + exception photos.** Critical/attention items require extra evidence.
+3. **Fast-submit heuristic.** Large checklists completed unrealistically quickly are flagged (`is_fast_submit`) for scrutiny.
+4. **Seed vs bootstrap vs keep-users.** `app.seed` wipes and loads demo/plant data — never against live floor history without a backup. `scripts.seed_plant_keep_users` refreshes the machine roster without deleting accounts. `bootstrap_account.py` creates a single real admin/supervisor without touching machines.
+5. **Host-side backups.** `backup.sh` runs on the host against published Postgres `5432`, independent of container lifecycle.
+
+## Getting started
+
+### Prerequisites
+
+- Docker + Compose, or local Python 3.11+ / Node 20+ and Postgres
+
+### Docker Compose
 
 ```bash
+git clone https://github.com/Kuberpack/maintain.git
+cd maintain
 cp .env.example .env
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 docker compose up --build
 ```
 
-- Backend: http://localhost:8000 (health check at `/health`)
-- Frontend: http://localhost:5173
-- Postgres: localhost:5432
-
-`/health` passing doesn't mean the app works -- it's just a DB ping. Compose
-starts against an **empty database**; run migrations and seed it (once,
-after the containers are up) before anything else will work:
+Then migrate and seed (empty DB on first boot):
 
 ```bash
 docker compose exec backend alembic upgrade head
 docker compose exec backend python -m app.seed
 ```
 
-## Running locally without Docker
+- Backend: http://localhost:8000 (`/health` is a DB ping only)
+- Frontend: http://localhost:5173
 
-Backend:
+### Local backend (without Compose)
 
 ```bash
 cd backend
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env  # point DATABASE_URL at your local Postgres
+cp .env.example .env   # point DATABASE_URL at your local Postgres
+.venv/bin/alembic upgrade head
 .venv/bin/uvicorn app.main:app --reload
 ```
 
-Frontend:
+### Environment variables (names)
 
-```bash
-cd frontend
-npm install
-cp .env.example .env
-npm run dev
-```
+Root / backend / frontend `.env.example` files list names such as:
 
-## Seed data
+- `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+- JWT / secret settings used by the API
+- `VITE_API_URL` (or equivalent) for the frontend
+- `BACKUP_RETENTION_DAYS` for the backup script
 
-`backend/app/seed.py` wipes and reseeds the database with the plant roster
-(32 units, real operator/supervisor phones, split FAC checklists, utility
-PM for compressors/DGs/etc.):
+Never commit filled `.env` files.
+
+### Demo / plant seed (destructive)
+
+`backend/app/seed.py` wipes and reseeds the database with the plant roster (32 units, operator/supervisor phones, split FAC checklists, utility PM for compressors/DGs/etc.):
 
 ```bash
 cd backend
 .venv/bin/python -m app.seed
 ```
 
-Do not run seed against a database that already has real floor history
-unless you have a backup — it deletes existing machines, tasks, and users.
+**Do not run seed against a database that already has real floor history unless you have a backup** — it deletes existing machines, tasks, and users.
 
-Operator and supervisor PINs are random. After seed, read
-`backend/.plant_pins.txt` (gitignored) and hand those out. Management login
-for local seed is still `priya.kapoor@kuberpack.com` / `ChangeMe123!`.
+Operator and supervisor PINs are random. After seed, read `backend/.plant_pins.txt` (gitignored) and hand those out. Management login for local seed is still `priya.kapoor@kuberpack.com` / `ChangeMe123!` — change before any shared deployment.
 
-To refresh machines on a live DB without deleting existing accounts:
+### Refresh machines on a live DB (keep accounts)
 
 ```bash
 cd backend
 .venv/bin/python -m scripts.seed_plant_keep_users
 ```
 
-## Bootstrapping real data (no dummy accounts)
+Keeps admin/management accounts and upserts the roster by phone.
 
-For a real deployment, don't run `seed.py` -- it wipes everything. Either
-run `scripts.seed_plant_keep_users` after migrate (keeps admin/management,
-upserts the roster by phone) or create exactly one real admin or
-supervisor account with `backend/app/bootstrap_account.py`, then add the
-rest through the app:
+### First real account (no wipe)
+
+For a real deployment, do **not** run `seed.py`. Create exactly one real admin or supervisor, then add the rest through the app:
 
 ```bash
 docker compose exec backend python -m app.bootstrap_account
+# or locally:
+# cd backend && .venv/bin/python -m app.bootstrap_account
 ```
 
-Prompts for role (`admin` or `supervisor`), name, phone number, and PIN
-(the PIN prompt is hidden, like a password field). Touches nothing else in
-the database -- safe to run against a database that already has real data
-in it, as long as the phone number you give it isn't already taken. See
-`schema.md`/`architecture.md` for the difference between the two roles --
-briefly, `admin` can manage any user account (including other
-supervisors), while `supervisor` can only manage operator accounts.
+Prompts for role (`admin` or `supervisor`), name, phone number, and PIN. `admin` can manage all account types; `supervisor` can only manage operator accounts.
 
-## Backups
-
-`scripts/backup.sh` dumps the database (compressed) to `backups/` and prunes
-dumps older than `BACKUP_RETENTION_DAYS` (default 14). It reads
-`POSTGRES_USER`/`PASSWORD`/`DB` from the root `.env` -- the same variables
-docker-compose uses -- and connects over TCP to `localhost:5432`, so it
-works the same way whether Postgres is running via `docker compose up` (which
-publishes that port to the host) or as a bare-metal install. Needs the
-`postgresql-client` package on whatever machine runs it (for `pg_dump`).
+### Backups
 
 ```bash
 ./scripts/backup.sh
+# restore example:
+# gunzip -c backups/maintain_YYYYMMDD_HHMMSS.sql.gz | psql -h localhost -U maintain -d maintain
 ```
 
-Schedule it with a host crontab entry (not a container -- this is meant to
-run on the actual shared PC/server, independent of the app containers'
-lifecycle):
+Uses `POSTGRES_USER` / `PASSWORD` / `DB` from the root `.env`. Needs `postgresql-client` (`pg_dump`) on the host that runs the script.
 
-```bash
-crontab -e
-# daily at 2am:
-0 2 * * * cd /path/to/maintain && ./scripts/backup.sh >> backups/backup.log 2>&1
+## Project structure
+
+```
+maintain/
+├── backend/app/
+│   ├── routers/       # auth, machines, tasks, reviews, reports, …
+│   ├── models.py
+│   ├── scheduler.py
+│   ├── seed.py
+│   └── bootstrap_account.py
+├── backend/alembic/
+├── backend/scripts/   # e.g. seed_plant_keep_users
+├── frontend/src/
+│   ├── pages/         # Today, Overdue, Review, Reports, Users, …
+│   ├── auth/
+│   └── api/
+├── scripts/backup.sh
+├── docker-compose.yml
+├── DEPLOYMENT.md
+├── architecture.md
+└── schema.md
 ```
 
-To restore a dump (into a database that already has the schema, or a fresh
-one you'll then run `alembic upgrade head` against):
+## Testing / quality
 
-```bash
-gunzip -c backups/maintain_20260101_020000.sql.gz | psql -h localhost -U maintain -d maintain
-```
+Validate via `/health`, login, and completing a checklist through review. Prefer adding API tests around review transitions, supervisor machine scope, and recurrence creation before expanding plant rollout.
+
+## Deployment
+
+See `DEPLOYMENT.md` for the Vercel + Railway split, the Vercel API proxy, env wiring, and migration order.

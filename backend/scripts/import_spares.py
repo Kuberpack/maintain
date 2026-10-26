@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         if sheet.blank_rows_skipped:
             extra += f", {sheet.blank_rows_skipped} blank row(s) skipped"
         if sheet.bad_qty_skipped:
-            extra += f", {sheet.bad_qty_skipped} row(s) skipped (qty not a number)"
+            extra += f", {sheet.bad_qty_skipped} row(s) skipped (qty not a whole number)"
         print(f"{sheet.category}: {sheet.sheet_rows} sheet rows -> {sheet.items} items{extra}")
 
     db = SessionLocal()

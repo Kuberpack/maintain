@@ -14,7 +14,7 @@ class PartReplacementCreate(CamelModel):
     # Optional stock draw. Omitted (or null) keeps the old free-text log and
     # does not change inventory. quantity_used defaults to 1 when a spare is set.
     spare_part_id: uuid.UUID | None = None
-    quantity_used: float | None = Field(default=None, gt=0)
+    quantity_used: int | None = Field(default=None, ge=1)
 
 
 class PartReplacementUpdate(CamelModel):
@@ -31,4 +31,4 @@ class PartReplacementPublic(CamelModel):
     replaced_by: uuid.UUID | None
     notes: str | None
     spare_part_id: uuid.UUID | None
-    quantity_used: float | None
+    quantity_used: int | None

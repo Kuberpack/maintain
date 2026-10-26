@@ -336,7 +336,7 @@ class PartReplacement(Base):
     spare_part_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("spare_parts.id", ondelete="RESTRICT")
     )
-    quantity_used: Mapped[float | None] = mapped_column(Float)
+    quantity_used: Mapped[int | None] = mapped_column(Integer)
 
     machine: Mapped["Machine"] = relationship(back_populates="part_replacements")
     replaced_by_user: Mapped["User | None"] = relationship(
@@ -362,9 +362,9 @@ class SparePart(Base):
     name: Mapped[str] = mapped_column(String(255))
     item_group: Mapped[str] = mapped_column(String(255), default="", server_default="")
     category: Mapped[str] = mapped_column(String(100))
-    qty_on_hand: Mapped[float] = mapped_column(Float)
+    qty_on_hand: Mapped[int] = mapped_column(Integer)
     unit: Mapped[str | None] = mapped_column(String(32))
-    min_qty: Mapped[float | None] = mapped_column(Float)
+    min_qty: Mapped[int | None] = mapped_column(Integer)
     machine_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("machines.id", ondelete="SET NULL")
     )

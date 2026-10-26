@@ -9,6 +9,7 @@ and does not drop stock.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -37,7 +38,7 @@ class ParsedSpare:
     category: str
     name: str
     item_group: str
-    qty_on_hand: float
+    qty_on_hand: int
     unit: str | None
 
 
@@ -82,21 +83,34 @@ def obvious_machine_name(category: str) -> str | None:
     return OBVIOUS_MACHINE_NAMES.get(category.strip().casefold())
 
 
-def parse_qty(value: object) -> tuple[float, str | None] | None:
-    """Return (number, unit). Unit is set when the cell was '12 Mtr' or '2 pkt'."""
+def _whole_number(value: int | float) -> int | None:
+    """A stock count. 5.0000000001 still counts; 3.5 and 3.999 do not."""
+    if isinstance(value, bool):
+        return None
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        return None
+    nearest = round(number)
+    if abs(number - nearest) > 1e-6:
+        return None
+    return nearest
+
+
+def parse_qty(value: object) -> tuple[int, str | None] | None:
+    """Return (whole number, unit). Unit is set when the cell was '12 Mtr' or '2 pkt'."""
     if isinstance(value, bool) or value is None:
         return None
     if isinstance(value, (int, float)):
-        qty = round(float(value), 3)
-        if qty < 0:
+        qty = _whole_number(value)
+        if qty is None:
             return None
         return (qty, None)
     if isinstance(value, str):
         match = _QTY_RE.match(value.strip())
         if match is None:
             return None
-        qty = round(float(match.group(1)), 3)
-        if qty < 0:
+        qty = _whole_number(float(match.group(1)))
+        if qty is None:
             return None
         unit = match.group(2).strip() or None
         if unit is not None and len(unit) > 32:
@@ -179,14 +193,14 @@ def _parse_sheet(
             category=category,
             name=name,
             item_group=group,
-            qty_on_hand=round(existing.qty_on_hand + qty, 3),
+            qty_on_hand=existing.qty_on_hand + qty,
             unit=existing.unit or unit,
         )
     return [merged[key] for key in order]
 
 
-def _same_qty(left: float, right: float) -> bool:
-    return round(float(left), 3) == round(float(right), 3)
+def _same_qty(left: int, right: int) -> bool:
+    return int(left) == int(right)
 
 
 def apply_import(db: Session, items: list[ParsedSpare]) -> ImportStats:

@@ -1,16 +1,12 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAsync } from '../lib/useAsync'
+import { formatQty, parseWholeQty } from '../lib/qty'
 import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
 import { listMachines } from '../api/machines'
 import { createSparePart, deleteSparePart, listSpareParts, updateSparePart } from '../api/spareParts'
 import type { Machine, SparePart } from '../api/types'
-
-function formatQty(qty: number): string {
-  const rounded = Math.round(qty * 1000) / 1000
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded)
-}
 
 function qtyLabel(part: Pick<SparePart, 'qtyOnHand' | 'unit'>): string {
   const text = formatQty(part.qtyOnHand)
@@ -83,19 +79,19 @@ function SpareEditor({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    const qty = Number(draft.qtyOnHand)
+    const qty = parseWholeQty(draft.qtyOnHand)
     const minText = draft.minQty.trim()
-    const min = minText === '' ? null : Number(minText)
+    const min = minText === '' ? null : parseWholeQty(minText)
     if (!draft.name.trim() || !draft.category.trim()) {
       setError('Name and area are required')
       return
     }
-    if (!Number.isFinite(qty) || qty < 0) {
-      setError('On-hand quantity must be zero or more')
+    if (qty == null) {
+      setError('On-hand quantity must be a whole number, zero or more')
       return
     }
-    if (min != null && (!Number.isFinite(min) || min < 0)) {
-      setError('Minimum quantity must be zero or more')
+    if (minText !== '' && min == null) {
+      setError('Minimum quantity must be a whole number, zero or more')
       return
     }
     setSaving(true)
@@ -167,7 +163,10 @@ function SpareEditor({
           <span className="font-medium text-slate-700">On hand</span>
           <input
             required
-            inputMode="decimal"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
             value={draft.qtyOnHand}
             onChange={(event) => setField('qtyOnHand', event.target.value)}
             className={inputClass}
@@ -180,7 +179,10 @@ function SpareEditor({
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-slate-700">Minimum (optional)</span>
           <input
-            inputMode="decimal"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
             value={draft.minQty}
             onChange={(event) => setField('minQty', event.target.value)}
             className={inputClass}

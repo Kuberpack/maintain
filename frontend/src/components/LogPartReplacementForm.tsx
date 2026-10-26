@@ -4,6 +4,7 @@ import { createPartReplacement } from '../api/partReplacements'
 import { listSpareParts } from '../api/spareParts'
 import { ApiError } from '../api/client'
 import { todayLocalDate } from '../lib/date'
+import { formatQty, parseWholeQty } from '../lib/qty'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../auth/useAuth'
 import { useLocale } from '../locale/localeContext'
@@ -14,11 +15,6 @@ interface LogPartReplacementFormProps {
   onLogged: () => void
   /** Phone-sized controls for the operator's Today page. */
   large?: boolean
-}
-
-function formatQty(qty: number): string {
-  const rounded = Math.round(qty * 1000) / 1000
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded)
 }
 
 export function LogPartReplacementForm({ machineId, onLogged, large = false }: LogPartReplacementFormProps) {
@@ -70,10 +66,23 @@ export function LogPartReplacementForm({ machineId, onLogged, large = false }: L
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    const used = Number(quantityUsed)
-    if (sparePartId && (!Number.isFinite(used) || used <= 0)) {
-      setError('Quantity used must be greater than zero')
-      return
+    let used: number | undefined
+    if (sparePartId) {
+      const onHand = selectedSpare == null ? 0 : Math.trunc(selectedSpare.qtyOnHand)
+      const parsed = parseWholeQty(quantityUsed)
+      if (onHand < 1) {
+        setError('None on hand')
+        return
+      }
+      if (parsed == null || parsed < 1) {
+        setError('Quantity used must be a whole number of at least 1')
+        return
+      }
+      if (parsed > onHand) {
+        setError(`Only ${onHand} on hand`)
+        return
+      }
+      used = parsed
     }
     setError(null)
     setSubmitting(true)
@@ -84,7 +93,7 @@ export function LogPartReplacementForm({ machineId, onLogged, large = false }: L
         replacedAt,
         notes: notes || undefined,
         sparePartId: sparePartId || undefined,
-        quantityUsed: sparePartId ? used : undefined,
+        quantityUsed: used,
       })
       reset()
       setOpen(false)
@@ -161,18 +170,25 @@ export function LogPartReplacementForm({ machineId, onLogged, large = false }: L
                 Taking <span className="font-medium">{selectedSpare.name}</span> ({formatQty(selectedSpare.qtyOnHand)}
                 {selectedSpare.unit ? ` ${selectedSpare.unit}` : ''} on hand)
               </p>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-slate-700">Qty used</span>
-                <input
-                  type="number"
-                  min="0.001"
-                  step="1"
-                  required
-                  value={quantityUsed}
-                  onChange={(e) => setQuantityUsed(e.target.value)}
-                  className={inputClass}
-                />
-              </label>
+              {Math.trunc(selectedSpare.qtyOnHand) < 1 ? (
+                <p className="text-sm text-amber-800">None on hand.</p>
+              ) : (
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium text-slate-700">Qty used</span>
+                  {/* min and step stay on the same integer grid. min 0.001 with step 1 rejects 1. */}
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={Math.trunc(selectedSpare.qtyOnHand)}
+                    step={1}
+                    required
+                    value={quantityUsed}
+                    onChange={(e) => setQuantityUsed(e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+              )}
               <button
                 type="button"
                 onClick={() => {

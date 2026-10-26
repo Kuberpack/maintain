@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
@@ -13,6 +14,7 @@ from app.database import SessionLocal, engine
 from app.models import Machine, PartReplacement, SparePart, User, UserRole
 from app.routers.part_replacements import create_part_replacement, delete_part_replacement
 from app.schemas.part_replacements import PartReplacementCreate
+from app.schemas.spare_parts import SparePartCreate
 from app.services.spares import OutOfStock, deduct_stock, restore_stock
 from app.services.spares_import import ParsedSpare, apply_import, obvious_machine_name, parse_qty, parse_workbook
 
@@ -93,11 +95,16 @@ class ParseSparesTest(unittest.TestCase):
 
     def test_parse_qty(self) -> None:
         self.assertEqual(parse_qty(4), (4, None))
+        self.assertEqual(parse_qty(5.0), (5, None))
         self.assertEqual(parse_qty("12 Mtr"), (12, "Mtr"))
         self.assertEqual(parse_qty("2 pkt"), (2, "pkt"))
         self.assertIsNone(parse_qty("n/a"))
         self.assertIsNone(parse_qty(-1))
         self.assertIsNone(parse_qty(None))
+        self.assertIsNone(parse_qty(3.999))
+        self.assertIsNone(parse_qty(1.001))
+        self.assertIsNone(parse_qty(1.5))
+        self.assertIsNone(parse_qty("12.5 Mtr"))
 
 
 class StockMathTest(unittest.TestCase):
@@ -122,6 +129,34 @@ class StockMathTest(unittest.TestCase):
     def test_zero_on_hand_is_low(self) -> None:
         part = SparePart(name="Sensor", item_group="", category="Auto Die", qty_on_hand=0)
         self.assertTrue(part.low_stock)
+
+    def test_fractional_draw_is_rejected(self) -> None:
+        part = SparePart(name="1213 - NTN", item_group="Bearing", category="Bearing", qty_on_hand=5)
+        with self.assertRaises(ValueError):
+            deduct_stock(part, 1.001)
+        self.assertEqual(part.qty_on_hand, 5)
+
+    def test_api_rejects_fractional_quantities(self) -> None:
+        machine_id = uuid.uuid4()
+        with self.assertRaises(ValidationError):
+            PartReplacementCreate(
+                machine_id=machine_id,
+                part_name="1213 - NTN",
+                replaced_at=date(2026, 10, 26),
+                spare_part_id=uuid.uuid4(),
+                quantity_used=1.001,
+            )
+        with self.assertRaises(ValidationError):
+            SparePartCreate(name="Bolt", category="Auto Die", qty_on_hand=3.999)
+        created = PartReplacementCreate(
+            machine_id=machine_id,
+            part_name="1213 - NTN",
+            replaced_at=date(2026, 10, 26),
+            quantity_used=1,
+        )
+        spare = SparePartCreate(name="Bolt", category="Auto Die", qty_on_hand=4, min_qty=1)
+        self.assertEqual(created.quantity_used, 1)
+        self.assertEqual((spare.qty_on_hand, spare.min_qty), (4, 1))
 
 
 def _as_test_rows(items: list[ParsedSpare]) -> list[ParsedSpare]:

@@ -24,6 +24,7 @@ interface NavItem {
     | 'directory'
     | 'shift'
     | 'spares'
+    | 'removedParts'
   end: boolean
   roles?: readonly UserRole[]
   badge?: 'review' | 'today'
@@ -34,6 +35,7 @@ const LINKS: NavItem[] = [
   { to: '/today', labelKey: 'today', end: false, badge: 'today' },
   { to: '/machines', labelKey: 'machines', end: true, roles: ['admin', 'supervisor', 'management'] },
   { to: '/spares', labelKey: 'spares', end: false, roles: ['admin', 'supervisor', 'management'] },
+  { to: '/removed', labelKey: 'removedParts', end: false, roles: ['admin', 'supervisor', 'management'] },
   { to: '/review', labelKey: 'review', end: false, roles: ['admin', 'supervisor'], badge: 'review' },
   { to: '/shift', labelKey: 'shift', end: false, roles: ['admin', 'supervisor', 'management'] },
   { to: '/overdue', labelKey: 'overdue', end: false, roles: ['admin', 'supervisor', 'management'] },
@@ -46,8 +48,8 @@ const LINKS: NavItem[] = [
 
 const DESKTOP_PRIMARY: Record<UserRole, string[]> = {
   operator: ['/today', '/directory', '/profile'],
-  supervisor: ['/', '/today', '/review', '/overdue', '/machines'],
-  management: ['/summary', '/reports', '/overdue', '/machines', '/spares'],
+  supervisor: ['/', '/today', '/review', '/overdue', '/machines', '/removed'],
+  management: ['/summary', '/reports', '/overdue', '/machines', '/removed'],
   admin: ['/', '/today', '/review', '/machines', '/overdue'],
 }
 
@@ -394,6 +396,14 @@ function NavIcon({ name, active = false }: { name: string; active?: boolean }) {
         <circle cx="6" cy="12" r="1.4" fill={stroke} />
         <circle cx="12" cy="12" r="1.4" fill={stroke} />
         <circle cx="18" cy="12" r="1.4" fill={stroke} />
+      </svg>
+    )
+  }
+  if (name === 'removedParts') {
+    return (
+      <svg {...common}>
+        <path d="M4 8h16v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z" stroke={stroke} strokeWidth="1.8" />
+        <path d="M8 8V6a4 4 0 0 1 8 0v2M12 12v5M9.5 14.5 12 12l2.5 2.5" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     )
   }

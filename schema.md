@@ -135,9 +135,47 @@ Low stock means on-hand is 0 or below, or `min_qty` is set and on-hand is at or 
 | part_name | text | |
 | replaced_at | date | |
 | replaced_by | uuid, FK → users.id | |
-| notes | text | reason/condition of old part |
+| notes | text | reason the new part was fitted |
 | spare_part_id | uuid, FK → spare_parts.id, nullable | set only when this log took stock. RESTRICT: the spare row stays while a log points at it |
-| quantity_used | float, nullable | how many were deducted. Null when the log did not use stock. Deleting the log puts this many back |
+| quantity_used | int, nullable | how many were deducted. Null when the log did not use stock. Deleting the log puts this many back, and also reverses a refurbished credit on the removed part |
+
+## `removed_parts`
+The old part that came off when a replacement was logged. One row per replacement (rows logged before this table have none). Current status is the latest disposition. History is `removed_part_events`.
+
+| column | type | notes |
+|---|---|---|
+| id | uuid, PK | |
+| part_replacement_id | uuid, FK → part_replacements.id, unique | CASCADE |
+| machine_id | uuid, FK → machines.id | CASCADE. Copied so the list can filter without guessing |
+| part_name | text | the part that came off. Defaults to the fitted part name |
+| condition | enum | worn / damaged / broken / reusable |
+| status | enum | pending_decision / in_maintenance_store / sent_for_repair / returned_to_stock / scrapped / sold / returned_to_vendor |
+| quantity | int | how many came off. Default 1 |
+| location | text, nullable | where it is now, e.g. maintenance store rack B |
+| notes | text, nullable | latest note |
+| vendor | text, nullable | repair vendor, or the vendor a warranty return went to |
+| sent_on | date, nullable | sent for repair, or returned to the vendor |
+| scrap_on | date, nullable | |
+| scrap_qty | float, nullable | pieces or weight |
+| scrap_unit | text, nullable | kg or pcs |
+| scrap_buyer | text, nullable | |
+| sale_buyer | text, nullable | |
+| sale_amount | float, nullable | rupees |
+| sale_on | date, nullable | |
+| warranty_note | text, nullable | |
+| stock_credited | bool | true while a refurbished quantity is sitting on a spare |
+| credited_spare_part_id | uuid, FK → spare_parts.id, nullable | RESTRICT while set. Often a "Used Refurbish" item, not the new part that was fitted |
+| credited_qty | int, nullable | pieces added back. Taken back out if the disposition changes or the replacement is undone |
+| created_by | uuid, FK → users.id, nullable | SET NULL |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+Logging a replacement only accepts `pending_decision` or `in_maintenance_store`. Supervisor/admin record the later disposition. Operators do not open this list.
+
+A part is stale when it is still `pending_decision` and `replaced_at` is at least 7 days ago (the page can use another threshold).
+
+## `removed_part_events`
+Append-only. One row per log and per disposition change: who, when, the status at that moment, notes, and an optional photo URL from the existing upload flow. Detail columns (vendor, scrap, sale, spare name) are copied onto the event so the trail still reads after the current row moves on. Events are not edited. Undoing the replacement deletes them with the removed part.
 
 ## `repair_logs`
 | column | type | notes |
@@ -210,9 +248,10 @@ Unique on `(machine_id, log_date)` — saving is an upsert, since a second save 
 - `machines` 1—N `task_types` 1—N `task_instances`
 - `task_types` 1—N `checklist_items`
 - `task_instances` 1—N `checklist_item_results`
-- `machines` 1—N `part_replacements`
+- `machines` 1—N `part_replacements` 1—1 `removed_parts` 1—N `removed_part_events`
 - `machines` 1—N `spare_parts` (optional link)
 - `spare_parts` 1—N `part_replacements` (optional; only rows that deducted stock)
+- `spare_parts` 1—N `removed_parts` (optional; only while a refurbished quantity is credited)
 - `machines` 1—N `repair_logs`
 - `machines` 1—N `handover_notes`
 - `machines` 1—N `shift_logs` (at most one per `log_date`)

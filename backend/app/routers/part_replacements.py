@@ -1,20 +1,21 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.access import work_machine_ids, require_machine_access
 from app.core.deps import get_current_user, require_roles
 from app.core.utils import commit_or_409, get_or_404
 from app.database import get_db
-from app.models import Machine, PartReplacement, SparePart, User, UserRole
+from app.models import Machine, PartReplacement, RemovedPart, SparePart, User, UserRole
 from app.schemas.part_replacements import (
     PartReplacementCreate,
     PartReplacementPublic,
     PartReplacementUpdate,
 )
 from app.services.notifications import notify_part_replacement
-from app.services.spares import OutOfStock, deduct_stock, restore_stock
+from app.services.removed_parts import open_removed_part, release_replacement_stock
+from app.services.spares import OutOfStock, deduct_stock
 
 router = APIRouter(prefix="/part-replacements", tags=["part_replacements"])
 
@@ -23,6 +24,13 @@ router = APIRouter(prefix="/part-replacements", tags=["part_replacements"])
 _report_roles = require_roles(UserRole.operator, UserRole.supervisor, UserRole.admin)
 _write_roles = require_roles(UserRole.supervisor, UserRole.admin)
 
+_LOAD = (
+    selectinload(PartReplacement.removed_part).selectinload(RemovedPart.events),
+    selectinload(PartReplacement.removed_part).joinedload(RemovedPart.machine),
+    selectinload(PartReplacement.removed_part).joinedload(RemovedPart.credited_spare),
+    joinedload(PartReplacement.replaced_by_user),
+)
+
 
 @router.get("", response_model=list[PartReplacementPublic])
 def list_part_replacements(
@@ -30,7 +38,7 @@ def list_part_replacements(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[PartReplacement]:
-    query = db.query(PartReplacement)
+    query = db.query(PartReplacement).options(_LOAD)
     scoped_ids = work_machine_ids(db, current_user)
     if machine_id is not None:
         require_machine_access(db, current_user, machine_id)
@@ -46,7 +54,15 @@ def list_part_replacements(
 def get_part_replacement(
     part_replacement_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(get_current_user)
 ) -> PartReplacement:
-    return get_or_404(db, PartReplacement, part_replacement_id, "Part replacement not found")
+    row = (
+        db.query(PartReplacement)
+        .options(_LOAD)
+        .filter(PartReplacement.id == part_replacement_id)
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Part replacement not found")
+    return row
 
 
 @router.post("", response_model=PartReplacementPublic, status_code=201)
@@ -57,7 +73,7 @@ def create_part_replacement(
 ) -> PartReplacement:
     require_machine_access(db, current_user, payload.machine_id)
     machine = get_or_404(db, Machine, payload.machine_id, "Machine not found")
-    data = payload.model_dump()
+    data = payload.model_dump(exclude={"removed"})
     spare_part_id = data.pop("spare_part_id")
     requested_qty = data.pop("quantity_used")
     quantity_used = None
@@ -78,8 +94,16 @@ def create_part_replacement(
         replaced_by=current_user.id,
     )
     db.add(part_replacement)
+    db.flush()
+    try:
+        open_removed_part(db, part_replacement, current_user, payload.removed)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     db.commit()
-    db.refresh(part_replacement)
+    part_replacement = (
+        db.query(PartReplacement).options(_LOAD).filter(PartReplacement.id == part_replacement.id).one()
+    )
     notify_part_replacement(
         db,
         machine.name,
@@ -111,15 +135,16 @@ def delete_part_replacement(
     part_replacement_id: uuid.UUID, db: Session = Depends(get_db), _user=Depends(_write_roles)
 ) -> None:
     part_replacement = get_or_404(db, PartReplacement, part_replacement_id, "Part replacement not found")
-    # Put the pieces back only when this log is the one that took them.
-    if part_replacement.spare_part_id is not None and part_replacement.quantity_used:
-        spare = (
-            db.query(SparePart)
-            .filter(SparePart.id == part_replacement.spare_part_id)
-            .with_for_update()
-            .one_or_none()
-        )
-        if spare is not None:
-            restore_stock(spare, part_replacement.quantity_used)
+    # Fitted stock goes back. A refurbished credit on the old part comes back out.
+    try:
+        release_replacement_stock(db, part_replacement)
+    except OutOfStock as exc:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"Cannot undo this replacement: {exc}"
+        ) from exc
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     db.delete(part_replacement)
     commit_or_409(db, "Cannot delete this part replacement")

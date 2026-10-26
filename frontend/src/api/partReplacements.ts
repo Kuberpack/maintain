@@ -13,9 +13,22 @@ export function createPartReplacement(payload: {
   notes?: string
   sparePartId?: string
   quantityUsed?: number
+  removed?: {
+    partName?: string
+    condition: string
+    status: string
+    quantity: number
+    location?: string
+    notes?: string
+    photoUrl?: string
+  }
 }): Promise<PartReplacement> {
   return apiFetch<PartReplacement>('/part-replacements', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+export function deletePartReplacement(id: string): Promise<void> {
+  return apiFetch<void>(`/part-replacements/${id}`, { method: 'DELETE' })
 }

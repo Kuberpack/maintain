@@ -117,6 +117,19 @@ type Msg = {
   task: string
   due: string
   overdueBy: string
+  removedParts: string
+  oldPartSection: string
+  oldPartCondition: string
+  oldPartWhere: string
+  oldPartLocation: string
+  oldPartQty: string
+  oldPartName: string
+  conditionWorn: string
+  conditionDamaged: string
+  conditionBroken: string
+  conditionReusable: string
+  statusPendingDecision: string
+  statusInStore: string
 }
 
 export const messages: Record<Locale, Msg> = {
@@ -239,6 +252,19 @@ export const messages: Record<Locale, Msg> = {
     task: 'Task',
     due: 'Due',
     overdueBy: 'Overdue by',
+    removedParts: 'Removed parts',
+    oldPartSection: 'Old part that came off',
+    oldPartCondition: 'Condition',
+    oldPartWhere: 'Where it is now',
+    oldPartLocation: 'Location',
+    oldPartQty: 'How many came off',
+    oldPartName: 'Old part name, if different',
+    conditionWorn: 'Worn',
+    conditionDamaged: 'Damaged',
+    conditionBroken: 'Broken',
+    conditionReusable: 'Reusable',
+    statusPendingDecision: 'Pending decision',
+    statusInStore: 'In maintenance store',
   },
   hi: {
     today: 'आज का काम',
@@ -359,6 +385,19 @@ export const messages: Record<Locale, Msg> = {
     task: 'काम',
     due: 'तारीख',
     overdueBy: 'कितने दिन लेट',
+    removedParts: 'निकाले गए पार्ट',
+    oldPartSection: 'जो पार्ट निकला',
+    oldPartCondition: 'हालत',
+    oldPartWhere: 'अभी कहाँ है',
+    oldPartLocation: 'जगह',
+    oldPartQty: 'कितने निकले',
+    oldPartName: 'पुराने पार्ट का नाम, अगर अलग हो',
+    conditionWorn: 'घिसा',
+    conditionDamaged: 'क्षतिग्रस्त',
+    conditionBroken: 'टूटा',
+    conditionReusable: 'दोबारा चल सकता है',
+    statusPendingDecision: 'फैसला बाकी',
+    statusInStore: 'मेंटेनेंस स्टोर में',
   },
 }
 

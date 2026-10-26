@@ -17,6 +17,7 @@ import { WeeklyReportPage } from './pages/WeeklyReportPage'
 import { DirectoryPage } from './pages/DirectoryPage'
 import { ShiftLogsPage } from './pages/ShiftLogsPage'
 import { SparesPage } from './pages/SparesPage'
+import { RemovedPartsPage } from './pages/RemovedPartsPage'
 import { SupervisorDashboard } from './pages/SupervisorDashboard'
 import { BrandMark } from './components/BrandMark'
 import { useLocale } from './locale/localeContext'
@@ -73,6 +74,7 @@ function AppRoutes() {
           <Route element={<RoleRoute roles={['admin', 'supervisor', 'management']} />}>
             <Route path="/shift" element={<ShiftLogsPage />} />
             <Route path="/spares" element={<SparesPage />} />
+            <Route path="/removed" element={<RemovedPartsPage />} />
             <Route path="/overdue" element={<OverduePage />} />
             <Route path="/summary" element={<SummaryPage />} />
             <Route path="/reports" element={<WeeklyReportPage />} />

@@ -4,6 +4,7 @@ from datetime import date
 from pydantic import Field
 
 from app.schemas.base import CamelModel
+from app.schemas.removed_parts import RemovedPartCapture, RemovedPartPublic
 
 
 class PartReplacementCreate(CamelModel):
@@ -15,6 +16,9 @@ class PartReplacementCreate(CamelModel):
     # does not change inventory. quantity_used defaults to 1 when a spare is set.
     spare_part_id: uuid.UUID | None = None
     quantity_used: int | None = Field(default=None, ge=1)
+    # The old part that came off. Omitted still opens a pending trail so every
+    # new replacement is traceable. Older rows logged before this field stay null.
+    removed: RemovedPartCapture | None = None
 
 
 class PartReplacementUpdate(CamelModel):
@@ -32,3 +36,4 @@ class PartReplacementPublic(CamelModel):
     notes: str | None
     spare_part_id: uuid.UUID | None
     quantity_used: int | None
+    removed_part: RemovedPartPublic | None = None

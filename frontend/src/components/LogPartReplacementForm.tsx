@@ -2,13 +2,15 @@ import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createPartReplacement } from '../api/partReplacements'
 import { listSpareParts } from '../api/spareParts'
+import { uploadPhoto } from '../api/photos'
 import { ApiError } from '../api/client'
 import { todayLocalDate } from '../lib/date'
 import { formatQty, parseWholeQty } from '../lib/qty'
 import { useAsync } from '../lib/useAsync'
 import { useAuth } from '../auth/useAuth'
 import { useLocale } from '../locale/localeContext'
-import type { SparePart } from '../api/types'
+import { CameraCapture } from './CameraCapture'
+import type { RemovedPartCondition, RemovedPartStatus, SparePart } from '../api/types'
 
 interface LogPartReplacementFormProps {
   machineId: string
@@ -32,6 +34,14 @@ export function LogPartReplacementForm({ machineId, onLogged, large = false }: L
   const [stockQuery, setStockQuery] = useState('')
   const [sparePartId, setSparePartId] = useState('')
   const [quantityUsed, setQuantityUsed] = useState('1')
+  const [condition, setCondition] = useState<RemovedPartCondition>('worn')
+  const [removedStatus, setRemovedStatus] = useState<Extract<RemovedPartStatus, 'pending_decision' | 'in_maintenance_store'>>(
+    'pending_decision',
+  )
+  const [removedLocation, setRemovedLocation] = useState('')
+  const [removedQty, setRemovedQty] = useState('1')
+  const [removedName, setRemovedName] = useState('')
+  const [photo, setPhoto] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -61,6 +71,12 @@ export function LogPartReplacementForm({ machineId, onLogged, large = false }: L
     setStockQuery('')
     setSparePartId('')
     setQuantityUsed('1')
+    setCondition('worn')
+    setRemovedStatus('pending_decision')
+    setRemovedLocation('')
+    setRemovedQty('1')
+    setRemovedName('')
+    setPhoto(null)
     setError(null)
   }
 
@@ -84,9 +100,15 @@ export function LogPartReplacementForm({ machineId, onLogged, large = false }: L
       }
       used = parsed
     }
+    const cameOff = parseWholeQty(removedQty)
+    if (cameOff == null || cameOff < 1) {
+      setError('How many came off must be a whole number of at least 1')
+      return
+    }
     setError(null)
     setSubmitting(true)
     try {
+      const photoUrl = photo ? (await uploadPhoto(photo)).url : undefined
       await createPartReplacement({
         machineId,
         partName,
@@ -94,6 +116,14 @@ export function LogPartReplacementForm({ machineId, onLogged, large = false }: L
         notes: notes || undefined,
         sparePartId: sparePartId || undefined,
         quantityUsed: used,
+        removed: {
+          partName: removedName.trim() || undefined,
+          condition,
+          status: removedStatus,
+          quantity: cameOff,
+          location: removedLocation.trim() || undefined,
+          photoUrl,
+        },
       })
       reset()
       setOpen(false)
@@ -223,6 +253,68 @@ export function LogPartReplacementForm({ machineId, onLogged, large = false }: L
           className={inputClass}
         />
       </label>
+      <div className="flex flex-col gap-3 rounded-xl border border-line bg-paper p-3">
+        <p className="text-sm font-semibold text-ink">{t.oldPartSection}</p>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-slate-700">{t.oldPartCondition}</span>
+          <select value={condition} onChange={(e) => setCondition(e.target.value as RemovedPartCondition)} className={inputClass}>
+            <option value="worn">{t.conditionWorn}</option>
+            <option value="damaged">{t.conditionDamaged}</option>
+            <option value="broken">{t.conditionBroken}</option>
+            <option value="reusable">{t.conditionReusable}</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-slate-700">{t.oldPartWhere}</span>
+          <select
+            value={removedStatus}
+            onChange={(e) =>
+              setRemovedStatus(e.target.value as Extract<RemovedPartStatus, 'pending_decision' | 'in_maintenance_store'>)
+            }
+            className={inputClass}
+          >
+            <option value="pending_decision">{t.statusPendingDecision}</option>
+            <option value="in_maintenance_store">{t.statusInStore}</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-slate-700">
+            {t.oldPartLocation} ({t.optional})
+          </span>
+          <input
+            type="text"
+            value={removedLocation}
+            onChange={(e) => setRemovedLocation(e.target.value)}
+            className={inputClass}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-slate-700">{t.oldPartQty}</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            required
+            value={removedQty}
+            onChange={(e) => setRemovedQty(e.target.value)}
+            className={inputClass}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-slate-700">
+            {t.oldPartName} ({t.optional})
+          </span>
+          <input
+            type="text"
+            value={removedName}
+            onChange={(e) => setRemovedName(e.target.value)}
+            placeholder={partName}
+            className={inputClass}
+          />
+        </label>
+        <CameraCapture photo={photo} onPhotoChange={setPhoto} label={`${t.photo} (${t.optional})`} large={large} />
+      </div>
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium text-slate-700">
           {t.notes} ({t.optional})

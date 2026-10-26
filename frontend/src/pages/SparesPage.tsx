@@ -267,8 +267,8 @@ export function SparesPage() {
   if (parts.error) return <p className="p-6 text-red-600">{parts.error}</p>
 
   return (
-    <div className="mx-auto max-w-5xl p-4 pb-16">
-      <h1 className="mb-1 text-2xl font-bold text-slate-900">Spares</h1>
+    <div className="mx-auto w-full max-w-6xl px-4 pt-5 pb-6 sm:px-6 lg:pt-7">
+      <h1 className="mb-1 text-2xl font-bold tracking-tight text-ink sm:text-3xl">Spares</h1>
       <p className="mb-4 text-sm text-slate-600">
         {partList.length} items · {lowCount} low. A row is highlighted when on-hand is zero or at the minimum.
       </p>
@@ -367,9 +367,9 @@ export function SparesPage() {
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white p-6 text-slate-600">No spares match.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+        <div className="table-wrap overflow-x-auto rounded-2xl border border-line bg-white shadow-sm">
+          <table className="data-table min-w-full text-left text-sm">
+            <thead className="border-b border-line bg-paper text-xs tracking-wide text-stone-500 uppercase">
               <tr>
                 <th className="px-3 py-2 font-semibold">Item</th>
                 <th className="px-3 py-2 font-semibold">Group</th>
@@ -382,8 +382,8 @@ export function SparesPage() {
             </thead>
             <tbody>
               {filtered.map((part) => (
-                <tr key={part.id} className={part.lowStock ? 'bg-amber-50' : 'odd:bg-white even:bg-slate-50'}>
-                  <td className="px-3 py-2 font-medium text-slate-900">
+                <tr key={part.id} className={part.lowStock ? 'bg-amber-50' : 'odd:bg-white even:bg-stone-50'}>
+                  <td className="px-3 py-3 font-medium text-ink" data-label="Item">
                     {part.name}
                     {part.lowStock && (
                       <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900">
@@ -391,20 +391,20 @@ export function SparesPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-slate-600">{part.itemGroup || '—'}</td>
-                  <td className="px-3 py-2 text-slate-600">{part.category}</td>
-                  <td className="px-3 py-2 text-slate-900">{qtyLabel(part)}</td>
-                  <td className="px-3 py-2 text-slate-600">{part.minQty == null ? '—' : formatQty(part.minQty)}</td>
-                  <td className="px-3 py-2 text-slate-600">{part.machineName ?? '—'}</td>
+                  <td className="px-3 py-3 text-stone-600" data-label="Group">{part.itemGroup || '—'}</td>
+                  <td className="px-3 py-3 text-stone-600" data-label="Area">{part.category}</td>
+                  <td className="px-3 py-3 font-semibold text-ink" data-label="On hand">{qtyLabel(part)}</td>
+                  <td className="px-3 py-3 text-stone-600" data-label="Min">{part.minQty == null ? '—' : formatQty(part.minQty)}</td>
+                  <td className="px-3 py-3 text-stone-600" data-label="Machine">{part.machineName ?? '—'}</td>
                   {canEdit && (
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <td className="px-3 py-3 text-right whitespace-nowrap" data-label="">
                       <button
                         type="button"
                         onClick={() => {
                           setCreating(false)
                           setEditingId(part.id)
                         }}
-                        className="mr-2 text-sm font-medium text-slate-700 hover:underline"
+                        className="mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-ink hover:text-brand"
                       >
                         Edit
                       </button>
@@ -412,7 +412,7 @@ export function SparesPage() {
                         type="button"
                         disabled={deletingId === part.id}
                         onClick={() => void handleDelete(part)}
-                        className="text-sm font-medium text-red-700 hover:underline disabled:opacity-50"
+                        className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-red-700 disabled:opacity-50"
                       >
                         {deletingId === part.id ? 'Removing…' : 'Remove'}
                       </button>

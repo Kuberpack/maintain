@@ -1,10 +1,145 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Segoe UI", "Nirmala UI", "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
+  --color-brand: #e0561b;
+  --color-brand-dark: #b84312;
+  --color-ink: #1c1410;
+  --color-paper: #f4efe8;
+  --color-kraft: #8b683e;
+  --color-line: #e6ddd2;
+}
+
 :root {
   color-scheme: light;
+  --brand: #e0561b;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Existing primary actions use bg-slate-900. Brand them without rewriting every form. */
+button.bg-slate-900,
+a.bg-slate-900 {
+  background-color: #e0561b;
+}
+
+button.bg-slate-900:hover,
+a.bg-slate-900:hover {
+  background-color: #b84312;
+}
+
+@media (max-width: 1023px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 639px) {
+  .table-wrap {
+    overflow: visible;
+  }
+
+  table.data-table {
+    min-width: 0 !important;
+  }
+
+  table.data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+
+  table.data-table,
+  table.data-table tbody,
+  table.data-table tr,
+  table.data-table td {
+    display: block;
+    width: auto;
+    min-width: 0;
+  }
+
+  table.data-table tr {
+    margin: 0 0 0.75rem;
+    border: 1px solid #e6ddd2;
+    border-radius: 1rem;
+    background: #fff;
+    padding: 0.85rem 1rem;
+    box-shadow: 0 1px 2px rgba(28, 20, 16, 0.05);
+  }
+
+  table.data-table td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.4rem 0;
+    text-align: right;
+    border: 0;
+    background: transparent !important;
+  }
+
+  table.data-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    max-width: 46%;
+    padding-top: 0.15rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #78716c;
+    text-align: left;
+  }
+
+  table.data-table td[data-label=""]::before,
+  table.data-table td:not([data-label])::before {
+    content: none;
+  }
+
+  table.data-table td[data-label=""] {
+    justify-content: flex-end;
+    padding-top: 0.65rem;
+  }
+}
+
+@media print {
+  .app-nav,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
 }

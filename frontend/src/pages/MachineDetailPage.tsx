@@ -167,10 +167,10 @@ export function MachineDetailPage() {
   ].sort((a, b) => b.date.localeCompare(a.date))
 
   return (
-    <div className="mx-auto max-w-3xl p-4">
+    <div className="mx-auto w-full max-w-3xl px-4 pt-5 pb-6 sm:px-6 lg:pt-7">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{machineData.name}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">{machineData.name}</h1>
           <p className="text-sm text-slate-500">
             {machineData.type}
             {machineData.location ? ` · ${machineData.location}` : ''}

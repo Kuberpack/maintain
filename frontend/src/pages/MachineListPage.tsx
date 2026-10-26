@@ -12,7 +12,9 @@ import { AssignOperatorsBoard } from '../components/AssignOperatorsBoard'
 import { AssignSupervisorsBoard } from '../components/AssignSupervisorsBoard'
 import { useAuth } from '../auth/useAuth'
 import { useLocale } from '../locale/localeContext'
+import { ErrorState, LoadingState, Page, PageHeader } from '../components/ui'
 import type { Machine } from '../api/types'
+import type { DisplayStatus } from '../lib/status'
 
 function groupedSections(machines: Machine[]): Array<{ title: string | null; items: Machine[] }> {
   const groups = new Map<string, Machine[]>()
@@ -50,8 +52,8 @@ export function MachineListPage() {
   const loading = machines.loading || taskTypes.loading || taskInstances.loading || repairs.loading || config.loading
   const error = machines.error ?? taskTypes.error ?? taskInstances.error ?? repairs.error ?? config.error
 
-  if (loading) return <p className="p-6 text-slate-500">Loading machines…</p>
-  if (error) return <p className="p-6 text-red-600">{error}</p>
+  if (loading) return <LoadingState label={t.loading} />
+  if (error) return <ErrorState message={error} />
   if (!machines.data || !taskTypes.data || !taskInstances.data || !config.data) return null
 
   const machineList = machines.data
@@ -69,8 +71,8 @@ export function MachineListPage() {
   const canSeeSupervisor = user?.role === 'admin' || user?.role === 'management'
 
   return (
-    <div className="mx-auto max-w-5xl p-4">
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">Machines</h1>
+    <Page>
+      <PageHeader title={t.machines} />
 
       {openRepairs.length > 0 && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4">
@@ -127,7 +129,7 @@ export function MachineListPage() {
                 <Link
                   key={machine.id}
                   to={`/machines/${machine.id}`}
-                  className="flex items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow"
+                  className={`flex min-h-24 items-start justify-between gap-2 rounded-2xl border border-line border-l-4 bg-white p-4 shadow-sm transition hover:shadow-md ${accentFor(status)}`}
                 >
                   <div>
                     <h2 className="font-medium text-slate-900">{machine.name}</h2>
@@ -154,6 +156,14 @@ export function MachineListPage() {
           </div>
         </section>
       ))}
-    </div>
+    </Page>
   )
+}
+
+function accentFor(status: DisplayStatus): string {
+  if (status === 'overdue' || status === 'rejected') return 'border-l-red-600'
+  if (status === 'upcoming') return 'border-l-amber-500'
+  if (status === 'review') return 'border-l-indigo-500'
+  if (status === 'ok' || status === 'done') return 'border-l-green-600'
+  return 'border-l-stone-300'
 }

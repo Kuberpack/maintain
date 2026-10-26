@@ -20,6 +20,7 @@ import { uploadPhoto } from '../api/photos'
 import { ApiError } from '../api/client'
 import { useLocale } from '../locale/localeContext'
 import { useAuth } from '../auth/useAuth'
+import { ErrorState, KpiCard, LoadingState, Page, PageHeader } from '../components/ui'
 import type { TaskInstance } from '../api/types'
 
 export function TodayPage() {
@@ -89,8 +90,8 @@ export function TodayPage() {
       .sort((a, b) => a.ti.dueDate.localeCompare(b.ti.dueDate))
   }, [machines.data, taskTypes.data, instances.data, config.data, focusMachine])
 
-  if (loading) return <p className="p-6 text-lg text-slate-500">लोड हो रहा है… / Loading…</p>
-  if (loadError) return <p className="p-6 text-lg text-red-600">{loadError}</p>
+  if (loading) return <LoadingState label={t.loading} />
+  if (loadError) return <ErrorState message={loadError} />
 
   const late = cards.filter((c) => c.display === 'overdue' || c.display === 'rejected')
   const dueToday = cards.filter((c) => c.display === 'upcoming' || c.display === 'ok')
@@ -118,9 +119,18 @@ export function TodayPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg p-4 pb-16">
-      <h1 className="mb-1 text-2xl font-bold text-slate-900">{t.today}</h1>
-      <p className="mb-4 text-base text-slate-600">{user?.name}</p>
+    <Page width="max-w-3xl">
+      <PageHeader
+        eyebrow={user?.role === 'operator' ? t.roleOperator : undefined}
+        title={t.today}
+        subtitle={user?.name}
+      />
+      <div className="mb-5 grid grid-cols-2 gap-3">
+        <KpiCard label={t.late} value={late.length} tone={late.length ? 'bad' : 'good'} />
+        <KpiCard label={t.dueToday} value={dueToday.length} tone={dueToday.length ? 'warn' : 'good'} />
+        <KpiCard label={t.waiting} value={waiting.length} tone={waiting.length ? 'info' : 'good'} />
+        <KpiCard label={t.repairOpen} value={openRepairs.length} tone={openRepairs.length ? 'bad' : 'good'} />
+      </div>
       {error && <p className="mb-3 text-base text-red-600">{error}</p>}
 
       {openRepairs.length > 0 && (
@@ -188,7 +198,7 @@ export function TodayPage() {
       <Section title={t.late} items={late} />
       <Section title={t.dueToday} items={dueToday} />
       <Section title={t.waiting} items={waiting} waiting />
-    </div>
+    </Page>
   )
 
   function Section({

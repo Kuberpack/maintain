@@ -6,12 +6,15 @@ import { approveTaskInstance, listTaskInstances, rejectTaskInstance } from '../a
 import { listUsers } from '../api/users'
 import { ApiError } from '../api/client'
 import { ChecklistResultsView } from '../components/ChecklistResultsView'
+import { ErrorState, LoadingState, Page, PageHeader } from '../components/ui'
+import { useLocale } from '../locale/localeContext'
 import { ProofPhoto } from '../components/ProofPhoto'
 import type { ExceptionLevel, TaskInstance } from '../api/types'
 
 const RANK: Record<ExceptionLevel, number> = { critical: 0, attention: 1, none: 2 }
 
 export function ReviewPage() {
+  const { t } = useLocale()
   const machines = useAsync(() => listMachines(), [])
   const taskTypes = useAsync(() => listTaskTypes(), [])
   const instances = useAsync(() => listTaskInstances({ reviewStatus: 'awaiting_review' }), [])
@@ -34,8 +37,8 @@ export function ReviewPage() {
     })
   }, [instances.data])
 
-  if (loading) return <p className="p-6 text-slate-500">Loading review queue…</p>
-  if (loadError) return <p className="p-6 text-red-600">{loadError}</p>
+  if (loading) return <LoadingState label={t.loading} />
+  if (loadError) return <ErrorState message={loadError} />
   if (!machines.data || !taskTypes.data || !users.data) return null
 
   const machineByTaskType = new Map(
@@ -77,14 +80,11 @@ export function ReviewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-4">
-      <h1 className="mb-1 text-xl font-semibold text-slate-900">Review queue</h1>
-      <p className="mb-4 text-sm text-slate-500">
-        {queue.length} submission(s) waiting. Critical and Attention are at the top.
-      </p>
+    <Page width="max-w-3xl">
+      <PageHeader title={t.review} subtitle={t.needsReview} />
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
       {queue.length === 0 ? (
-        <p className="rounded-md border border-slate-200 bg-white p-4 text-slate-500">Nothing waiting.</p>
+        <p className="rounded-2xl border border-dashed border-line bg-white p-6 text-base text-stone-500">{t.nothingWaiting}</p>
       ) : (
         <ul className="flex flex-col gap-4">
           {queue.map((instance) => {
@@ -169,7 +169,7 @@ export function ReviewPage() {
           })}
         </ul>
       )}
-    </div>
+    </Page>
   )
 }
 

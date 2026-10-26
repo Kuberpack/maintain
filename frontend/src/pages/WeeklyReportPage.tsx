@@ -65,10 +65,10 @@ export function WeeklyReportPage() {
   const userById = new Map(users.data.map((u) => [u.id, u]))
 
   return (
-    <div className="mx-auto max-w-5xl p-4">
+    <div className="mx-auto w-full max-w-6xl px-4 pt-5 pb-6 sm:px-6 lg:pt-7">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Weekly report</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">Weekly report</h1>
           <p className="text-sm text-slate-500">
             {report.data.weekStart} – {report.data.weekEnd}
           </p>
@@ -122,8 +122,8 @@ export function WeeklyReportPage() {
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
-        <table className="w-full min-w-[640px] text-sm">
+      <div className="table-wrap overflow-x-auto rounded-2xl border border-line bg-white shadow-sm">
+        <table className="data-table w-full min-w-[640px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-3 py-2 font-medium">Machine</th>
@@ -139,13 +139,13 @@ export function WeeklyReportPage() {
               const tt = ttById.get(ti.taskTypeId)
               const machine = tt ? machineById.get(tt.machineId) : undefined
               return (
-                <tr key={ti.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2">{machine?.name}</td>
-                  <td className="px-3 py-2">{tt?.description}</td>
-                  <td className="px-3 py-2">{(ti.completedAt ?? ti.dueDate).slice(0, 10)}</td>
-                  <td className="px-3 py-2">{ti.completedBy ? userById.get(ti.completedBy)?.name : '—'}</td>
-                  <td className="px-3 py-2">{labelReview(ti.reviewStatus)}</td>
-                  <td className="px-3 py-2">{labelLevel(ti.exceptionLevel)}</td>
+                <tr key={ti.id} className="border-t border-line">
+                  <td className="px-3 py-3 font-semibold" data-label="Machine">{machine?.name}</td>
+                  <td className="px-3 py-3" data-label="Task">{tt?.description}</td>
+                  <td className="px-3 py-3" data-label="When">{(ti.completedAt ?? ti.dueDate).slice(0, 10)}</td>
+                  <td className="px-3 py-3" data-label="Who">{ti.completedBy ? userById.get(ti.completedBy)?.name : '—'}</td>
+                  <td className="px-3 py-3" data-label="Review">{labelReview(ti.reviewStatus)}</td>
+                  <td className="px-3 py-3" data-label="Flag">{labelLevel(ti.exceptionLevel)}</td>
                 </tr>
               )
             })}
@@ -158,7 +158,7 @@ export function WeeklyReportPage() {
 
 function Stat({ label, value, accent }: { label: string; value: number; accent?: 'red' }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
+    <div className="rounded-2xl border border-line bg-white p-3 shadow-sm">
       <p className="text-xs uppercase text-slate-500">{label}</p>
       <p className={`text-2xl font-semibold ${accent === 'red' ? 'text-red-600' : 'text-slate-900'}`}>{value}</p>
     </div>

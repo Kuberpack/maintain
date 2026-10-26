@@ -100,9 +100,9 @@ export function ShiftLogsPage() {
   })
 
   return (
-    <div className="mx-auto max-w-5xl p-4">
+    <div className="mx-auto w-full max-w-6xl px-4 pt-5 pb-6 sm:px-6 lg:pt-7">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Shift log insights</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">Shift log insights</h1>
         <label className="flex items-center gap-2 text-sm text-slate-600">
           Range
           <select
@@ -153,41 +153,41 @@ export function ShiftLogsPage() {
       )}
 
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Per machine</h2>
-      <div className="mb-6 overflow-x-auto rounded-md border border-slate-200 bg-white">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
+      <div className="table-wrap mb-6 overflow-x-auto rounded-2xl border border-line bg-white shadow-sm">
+        <table className="data-table w-full min-w-[720px] text-sm">
+          <thead className="bg-paper text-left text-stone-500">
             <tr>
-              <th className="px-3 py-2 font-medium">Machine</th>
-              <th className="px-3 py-2 font-medium">Logs</th>
-              <th className="px-3 py-2 font-medium">Run hrs</th>
-              <th className="px-3 py-2 font-medium">Output</th>
-              <th className="px-3 py-2 font-medium">Per hr</th>
-              <th className="px-3 py-2 font-medium">Waste %</th>
-              <th className="px-3 py-2 font-medium">Job chg</th>
-              <th className="px-3 py-2 font-medium">Delay min</th>
-              <th className="px-3 py-2 font-medium">Open repairs</th>
+              <th className="px-3 py-2 font-semibold">Machine</th>
+              <th className="px-3 py-2 font-semibold">Logs</th>
+              <th className="px-3 py-2 font-semibold">Run hrs</th>
+              <th className="px-3 py-2 font-semibold">Output</th>
+              <th className="px-3 py-2 font-semibold">Per hr</th>
+              <th className="px-3 py-2 font-semibold">Waste %</th>
+              <th className="px-3 py-2 font-semibold">Job chg</th>
+              <th className="px-3 py-2 font-semibold">Delay min</th>
+              <th className="px-3 py-2 font-semibold">Open repairs</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.machine.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">
-                  <Link to={`/machines/${row.machine.id}`} className="text-slate-900 hover:underline">
+                <td className="px-3 py-3" data-label="Machine">
+                  <Link to={`/machines/${row.machine.id}`} className="font-semibold text-ink hover:text-brand">
                     {row.machine.name}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-slate-600">{row.logCount || '—'}</td>
-                <td className="px-3 py-2 text-slate-600">{row.running ? hours(row.running) : '—'}</td>
-                <td className="px-3 py-2 text-slate-600">{row.output ? row.output.toLocaleString() : '—'}</td>
-                <td className="px-3 py-2 text-slate-600">
+                <td className="px-3 py-3 text-stone-600" data-label="Logs">{row.logCount || '—'}</td>
+                <td className="px-3 py-3 text-stone-600" data-label="Run hrs">{row.running ? hours(row.running) : '—'}</td>
+                <td className="px-3 py-3 text-stone-600" data-label="Output">{row.output ? row.output.toLocaleString() : '—'}</td>
+                <td className="px-3 py-3 text-stone-600" data-label="Per hr">
                   {row.running > 0 && row.output > 0 ? (row.output / (row.running / 60)).toFixed(0) : '—'}
                 </td>
-                <td className="px-3 py-2 text-slate-600">
+                <td className="px-3 py-3 text-stone-600" data-label="Waste %">
                   {row.wastage > 0 ? pct(row.wastage, row.output + row.wastage) : '—'}
                 </td>
-                <td className="px-3 py-2 text-slate-600">{row.jobChanges || '—'}</td>
-                <td className="px-3 py-2 text-slate-600">{row.delay || '—'}</td>
-                <td className={`px-3 py-2 ${row.openRepairs > 0 ? 'font-medium text-red-700' : 'text-slate-600'}`}>
+                <td className="px-3 py-3 text-stone-600" data-label="Job chg">{row.jobChanges || '—'}</td>
+                <td className="px-3 py-3 text-stone-600" data-label="Delay min">{row.delay || '—'}</td>
+                <td className={`px-3 py-3 ${row.openRepairs > 0 ? 'font-medium text-red-700' : 'text-stone-600'}`} data-label="Open repairs">
                   {row.openRepairs || '—'}
                 </td>
               </tr>
@@ -217,7 +217,7 @@ function Tile({ label, value, accent }: { label: string; value: string; accent?:
   const accentClass =
     accent === 'red' ? 'text-red-700' : accent === 'amber' ? 'text-amber-700' : 'text-slate-900'
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
+    <div className="rounded-2xl border border-line bg-white p-3 shadow-sm">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className={`mt-1 text-xl font-semibold ${accentClass}`}>{value}</p>
     </div>

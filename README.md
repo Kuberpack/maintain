@@ -126,6 +126,17 @@ cd backend
 
 Keeps admin/management accounts and upserts the roster by phone.
 
+### Spare-parts stock sheet
+
+`backend/data/maintenance_spares_24oct2026.xlsx` is the 24 Oct 2026 plant stock (8 sheets). Import upserts on area + name + item group, so running it again does not duplicate rows. On-hand qty is replaced with the sheet. A minimum qty set in the app is kept.
+
+```bash
+docker compose exec backend alembic upgrade head
+docker compose exec backend python -m scripts.import_spares
+```
+
+Rebuild the backend image first if this is the first time (`openpyxl` is installed from `requirements.txt`). Pass another `.xlsx` path as the first argument when the file is not the bundled one. The path is inside the container (`./backend` is mounted at `/app`).
+
 ### First real account (no wipe)
 
 For a real deployment, do **not** run `seed.py`. Create exactly one real admin or supervisor, then add the rest through the app:

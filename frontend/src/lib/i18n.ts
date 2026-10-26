@@ -65,6 +65,7 @@ type Msg = {
   replacedOn: string
   myMachine: string
   shift: string
+  spares: string
   shiftLog: string
   shiftLogSaved: string
   startTime: string
@@ -90,6 +91,45 @@ type Msg = {
   supervisorTodayHint: string
   saveAssignments: string
   assignmentsSaved: string
+  home: string
+  more: string
+  compliance: string
+  dueSoon: string
+  onTrack: string
+  waitingReview: string
+  viewAll: string
+  plantOverview: string
+  thisWeek: string
+  approved: string
+  rejected: string
+  critical: string
+  nothingWaiting: string
+  perMachine: string
+  roleOperator: string
+  roleSupervisor: string
+  roleManagement: string
+  roleAdmin: string
+  loginTitle: string
+  loginSubtitle: string
+  complianceBlurb: string
+  needsReview: string
+  close: string
+  task: string
+  due: string
+  overdueBy: string
+  removedParts: string
+  oldPartSection: string
+  oldPartCondition: string
+  oldPartWhere: string
+  oldPartLocation: string
+  oldPartQty: string
+  oldPartName: string
+  conditionWorn: string
+  conditionDamaged: string
+  conditionBroken: string
+  conditionReusable: string
+  statusPendingDecision: string
+  statusInStore: string
 }
 
 export const messages: Record<Locale, Msg> = {
@@ -158,6 +198,7 @@ export const messages: Record<Locale, Msg> = {
     replacedOn: 'Replaced on',
     myMachine: 'My machine',
     shift: 'Shift',
+    spares: 'Spares',
     shiftLog: "Today's shift log",
     shiftLogSaved: 'Shift log saved',
     startTime: 'Start time',
@@ -185,6 +226,45 @@ export const messages: Record<Locale, Msg> = {
     supervisorTodayHint: 'Operators start this work on their machine. Review submissions on the Review page.',
     saveAssignments: 'Save assignments',
     assignmentsSaved: 'Assignments saved',
+    home: 'Home',
+    more: 'More',
+    compliance: 'Compliance',
+    dueSoon: 'Due soon',
+    onTrack: 'On track',
+    waitingReview: 'Waiting review',
+    viewAll: 'View all',
+    plantOverview: 'Plant overview',
+    thisWeek: 'This week',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    critical: 'Critical',
+    nothingWaiting: 'Nothing waiting',
+    perMachine: 'Per machine',
+    roleOperator: 'Operator',
+    roleSupervisor: 'Supervisor',
+    roleManagement: 'Management',
+    roleAdmin: 'Admin',
+    loginTitle: 'Machine maintenance',
+    loginSubtitle: 'Sonipat plant. Sign in with your phone and PIN.',
+    complianceBlurb: 'Counts only work that is still open — not submitted, not approved.',
+    needsReview: 'Needs your review',
+    close: 'Close',
+    task: 'Task',
+    due: 'Due',
+    overdueBy: 'Overdue by',
+    removedParts: 'Removed parts',
+    oldPartSection: 'Old part that came off',
+    oldPartCondition: 'Condition',
+    oldPartWhere: 'Where it is now',
+    oldPartLocation: 'Location',
+    oldPartQty: 'How many came off',
+    oldPartName: 'Old part name, if different',
+    conditionWorn: 'Worn',
+    conditionDamaged: 'Damaged',
+    conditionBroken: 'Broken',
+    conditionReusable: 'Reusable',
+    statusPendingDecision: 'Pending decision',
+    statusInStore: 'In maintenance store',
   },
   hi: {
     today: 'आज का काम',
@@ -251,6 +331,7 @@ export const messages: Record<Locale, Msg> = {
     replacedOn: 'कब बदला',
     myMachine: 'मेरी मशीन',
     shift: 'शिफ्ट',
+    spares: 'स्पेयर',
     shiftLog: 'आज का शिफ्ट लॉग',
     shiftLogSaved: 'शिफ्ट लॉग सेव हो गया',
     startTime: 'शुरू का समय',
@@ -278,6 +359,45 @@ export const messages: Record<Locale, Msg> = {
     supervisorTodayHint: 'यह काम ऑपरेटर अपनी मशीन पर शुरू करेंगे। सबमिशन रिव्यू पेज पर देखें।',
     saveAssignments: 'असाइनमेंट सेव करें',
     assignmentsSaved: 'असाइनमेंट सेव हो गए',
+    home: 'होम',
+    more: 'और',
+    compliance: 'अनुपालन',
+    dueSoon: 'जल्दी',
+    onTrack: 'ठीक चल रहा',
+    waitingReview: 'रिव्यू बाकी',
+    viewAll: 'सब देखें',
+    plantOverview: 'प्लांट का हाल',
+    thisWeek: 'इस हफ्ते',
+    approved: 'मंजूर',
+    rejected: 'वापस',
+    critical: 'गंभीर',
+    nothingWaiting: 'अभी कुछ बाकी नहीं',
+    perMachine: 'मशीन के हिसाब से',
+    roleOperator: 'ऑपरेटर',
+    roleSupervisor: 'सुपरवाइज़र',
+    roleManagement: 'मैनेजमेंट',
+    roleAdmin: 'एडमिन',
+    loginTitle: 'मशीन रखरखाव',
+    loginSubtitle: 'सोनीपत प्लांट। फ़ोन और पिन से साइन इन करें।',
+    complianceBlurb: 'सिर्फ खुला काम गिना है — जो रिव्यू में गया या मंजूर हो गया, वह नहीं।',
+    needsReview: 'आपकी मंजूरी बाकी',
+    close: 'बंद करें',
+    task: 'काम',
+    due: 'तारीख',
+    overdueBy: 'कितने दिन लेट',
+    removedParts: 'निकाले गए पार्ट',
+    oldPartSection: 'जो पार्ट निकला',
+    oldPartCondition: 'हालत',
+    oldPartWhere: 'अभी कहाँ है',
+    oldPartLocation: 'जगह',
+    oldPartQty: 'कितने निकले',
+    oldPartName: 'पुराने पार्ट का नाम, अगर अलग हो',
+    conditionWorn: 'घिसा',
+    conditionDamaged: 'क्षतिग्रस्त',
+    conditionBroken: 'टूटा',
+    conditionReusable: 'दोबारा चल सकता है',
+    statusPendingDecision: 'फैसला बाकी',
+    statusInStore: 'मेंटेनेंस स्टोर में',
   },
 }
 

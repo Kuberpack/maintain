@@ -14,8 +14,8 @@ export function MyProfilePage() {
   if (!user) return null
 
   return (
-    <div className="mx-auto max-w-md p-4">
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">My Profile</h1>
+    <div className="mx-auto w-full max-w-md px-4 pt-5 pb-6 sm:px-6 lg:pt-7">
+      <h1 className="mb-4 text-2xl font-bold tracking-tight text-ink">My Profile</h1>
       <EditUserForm
         user={user}
         isSelf

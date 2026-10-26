@@ -6,8 +6,11 @@ import { listTaskInstances } from '../api/taskInstances'
 import { getPublicConfig } from '../api/config'
 import { computeDisplayStatus, daysUntilDue } from '../lib/status'
 import { StatusBadge } from '../components/StatusBadge'
+import { useLocale } from '../locale/localeContext'
+import { ErrorState, KpiCard, LoadingState, Page, PageHeader } from '../components/ui'
 
 export function OverduePage() {
+  const { t } = useLocale()
   const machines = useAsync(() => listMachines(), [])
   const taskTypes = useAsync(() => listTaskTypes(), [])
   const taskInstances = useAsync(() => listTaskInstances(), [])
@@ -16,8 +19,8 @@ export function OverduePage() {
   const loading = machines.loading || taskTypes.loading || taskInstances.loading || config.loading
   const error = machines.error ?? taskTypes.error ?? taskInstances.error ?? config.error
 
-  if (loading) return <p className="p-6 text-slate-500">Loading…</p>
-  if (error) return <p className="p-6 text-red-600">{error}</p>
+  if (loading) return <LoadingState label={t.loading} />
+  if (error) return <ErrorState message={error} />
   if (!machines.data || !taskTypes.data || !taskInstances.data || !config.data) return null
 
   const machineList = machines.data
@@ -38,21 +41,23 @@ export function OverduePage() {
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
 
   return (
-    <div className="mx-auto max-w-4xl p-4">
-      <h1 className="mb-1 text-xl font-semibold text-slate-900">Overdue tasks</h1>
-      <p className="mb-4 text-sm text-slate-500">{overdueInstances.length} task(s) past due, across all machines.</p>
+    <Page width="max-w-4xl">
+      <PageHeader title={t.overdue} />
+      <div className="mb-5 max-w-xs">
+        <KpiCard label={t.overdue} value={overdueInstances.length} tone={overdueInstances.length ? 'bad' : 'good'} />
+      </div>
 
       {overdueInstances.length === 0 ? (
-        <p className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-500">Nothing overdue.</p>
+        <p className="rounded-2xl border border-dashed border-line bg-white p-6 text-base text-stone-500">{t.nothingWaiting}</p>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
-          <table className="w-full min-w-[560px] text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
+        <div className="table-wrap overflow-x-auto rounded-2xl border border-line bg-white shadow-sm">
+          <table className="data-table w-full min-w-[560px] text-sm">
+            <thead className="bg-paper text-left text-stone-500">
               <tr>
-                <th className="px-3 py-2 font-medium">Machine</th>
-                <th className="px-3 py-2 font-medium">Task</th>
-                <th className="px-3 py-2 font-medium">Due</th>
-                <th className="px-3 py-2 font-medium">Overdue by</th>
+                <th className="px-3 py-2 font-semibold">{t.machines}</th>
+                <th className="px-3 py-2 font-semibold">{t.task}</th>
+                <th className="px-3 py-2 font-semibold">{t.due}</th>
+                <th className="px-3 py-2 font-semibold">{t.overdueBy}</th>
               </tr>
             </thead>
             <tbody>
@@ -60,22 +65,26 @@ export function OverduePage() {
                 const taskType = taskTypeById.get(instance.taskTypeId)
                 const machine = taskType ? machineById.get(taskType.machineId) : undefined
                 return (
-                  <tr key={instance.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2">
+                  <tr key={instance.id} className="border-t border-line">
+                    <td className="px-3 py-3" data-label={t.machines}>
                       {machine ? (
-                        <Link to={`/machines/${machine.id}`} className="font-medium text-slate-900 hover:underline">
+                        <Link to={`/machines/${machine.id}`} className="font-semibold text-ink hover:text-brand">
                           {machine.name}
                         </Link>
                       ) : (
                         '—'
                       )}
                     </td>
-                    <td className="px-3 py-2 text-slate-700">{taskType?.description ?? 'Task'}</td>
-                    <td className="px-3 py-2 text-slate-700">{instance.dueDate}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
+                    <td className="px-3 py-3 text-stone-700" data-label={t.task}>
+                      {taskType?.description ?? t.task}
+                    </td>
+                    <td className="px-3 py-3 text-stone-700" data-label={t.due}>
+                      {instance.dueDate}
+                    </td>
+                    <td className="px-3 py-3" data-label={t.overdueBy}>
+                      <div className="flex items-center justify-end gap-2 sm:justify-start">
                         <StatusBadge status="overdue" />
-                        <span className="text-slate-500">{-daysUntilDue(instance.dueDate)}d</span>
+                        <span className="text-stone-500">{-daysUntilDue(instance.dueDate)}d</span>
                       </div>
                     </td>
                   </tr>
@@ -85,6 +94,6 @@ export function OverduePage() {
           </table>
         </div>
       )}
-    </div>
+    </Page>
   )
 }

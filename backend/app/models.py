@@ -2,7 +2,19 @@ import enum
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, Time, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.dialects.postgresql import UUID
@@ -87,6 +99,29 @@ class OutputUnit(str, enum.Enum):
 class MachineKind(str, enum.Enum):
     production = "production"
     utility = "utility"
+
+
+class RemovedPartCondition(str, enum.Enum):
+    worn = "worn"
+    damaged = "damaged"
+    broken = "broken"
+    reusable = "reusable"
+
+
+class RemovedPartStatus(str, enum.Enum):
+    """Where a part that came off a machine is right now.
+
+    pending_decision and in_maintenance_store are open. The rest are
+    dispositions: repair, refurbished stock, scrap, resale, or warranty.
+    """
+
+    pending_decision = "pending_decision"
+    in_maintenance_store = "in_maintenance_store"
+    sent_for_repair = "sent_for_repair"
+    returned_to_stock = "returned_to_stock"
+    scrapped = "scrapped"
+    sold = "sold"
+    returned_to_vendor = "returned_to_vendor"
 
 
 class User(Base):
@@ -190,6 +225,7 @@ class Machine(Base):
     vendor_contacts: Mapped[list["VendorContact"]] = relationship(
         back_populates="machine", cascade="all, delete-orphan"
     )
+    spare_parts: Mapped[list["SparePart"]] = relationship(back_populates="machine")
 
 
 class TaskType(Base):
@@ -318,11 +354,209 @@ class PartReplacement(Base):
     replaced_at: Mapped[date] = mapped_column(Date)
     replaced_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     notes: Mapped[str | None] = mapped_column(Text)
+    # Set together when this log deducted stock. Both stay null on a free-text
+    # log, so older rows and notes that never named a stock item do not move qty.
+    spare_part_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("spare_parts.id", ondelete="RESTRICT")
+    )
+    quantity_used: Mapped[int | None] = mapped_column(Integer)
 
     machine: Mapped["Machine"] = relationship(back_populates="part_replacements")
     replaced_by_user: Mapped["User | None"] = relationship(
         foreign_keys=[replaced_by], back_populates="part_replacements"
     )
+    spare_part: Mapped["SparePart | None"] = relationship(back_populates="part_replacements")
+    removed_part: Mapped["RemovedPart | None"] = relationship(
+        back_populates="part_replacement",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
+
+
+class SparePart(Base):
+    """One stocked spare. Identity is the sheet area plus the item name and group.
+
+    item_group is "" when the sheet left the group blank, so the unique key
+    still holds (Postgres treats NULLs as distinct).
+    """
+
+    __tablename__ = "spare_parts"
+    __table_args__ = (
+        UniqueConstraint("category", "name", "item_group", name="uq_spare_parts_identity"),
+        Index("ix_spare_parts_machine_id", "machine_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255))
+    item_group: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    category: Mapped[str] = mapped_column(String(100))
+    qty_on_hand: Mapped[int] = mapped_column(Integer)
+    unit: Mapped[str | None] = mapped_column(String(32))
+    min_qty: Mapped[int | None] = mapped_column(Integer)
+    machine_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("machines.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    machine: Mapped["Machine | None"] = relationship(back_populates="spare_parts")
+    part_replacements: Mapped[list["PartReplacement"]] = relationship(back_populates="spare_part")
+    credited_removed_parts: Mapped[list["RemovedPart"]] = relationship(back_populates="credited_spare")
+
+    @property
+    def machine_name(self) -> str | None:
+        if self.machine is None:
+            return None
+        return self.machine.name
+
+    @property
+    def low_stock(self) -> bool:
+        if self.qty_on_hand <= 0:
+            return True
+        return self.min_qty is not None and self.qty_on_hand <= self.min_qty
+
+
+class RemovedPart(Base):
+    """The old part that came off a machine when a replacement was logged.
+
+    One row per part replacement. Current condition, status, and disposition
+    details live here. Movement history is append-only on removed_part_events.
+    stock_credited is true only while a refurbished quantity is sitting on
+    credited_spare_part_id — undoing the replacement, or moving off
+    returned_to_stock, takes that quantity back out.
+    """
+
+    __tablename__ = "removed_parts"
+    __table_args__ = (
+        UniqueConstraint("part_replacement_id", name="uq_removed_parts_part_replacement_id"),
+        Index("ix_removed_parts_machine_id", "machine_id"),
+        Index("ix_removed_parts_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    part_replacement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("part_replacements.id", ondelete="CASCADE")
+    )
+    machine_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("machines.id", ondelete="CASCADE")
+    )
+    part_name: Mapped[str] = mapped_column(String(255))
+    condition: Mapped[RemovedPartCondition] = mapped_column(
+        SAEnum(RemovedPartCondition, name="removed_part_condition")
+    )
+    status: Mapped[RemovedPartStatus] = mapped_column(SAEnum(RemovedPartStatus, name="removed_part_status"))
+    quantity: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    location: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+    vendor: Mapped[str | None] = mapped_column(String(255))
+    sent_on: Mapped[date | None] = mapped_column(Date)
+    scrap_on: Mapped[date | None] = mapped_column(Date)
+    scrap_qty: Mapped[float | None] = mapped_column(Float)
+    scrap_unit: Mapped[str | None] = mapped_column(String(32))
+    scrap_buyer: Mapped[str | None] = mapped_column(String(255))
+    sale_buyer: Mapped[str | None] = mapped_column(String(255))
+    sale_amount: Mapped[float | None] = mapped_column(Float)
+    sale_on: Mapped[date | None] = mapped_column(Date)
+    warranty_note: Mapped[str | None] = mapped_column(Text)
+    stock_credited: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    credited_spare_part_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("spare_parts.id", ondelete="RESTRICT")
+    )
+    credited_qty: Mapped[int | None] = mapped_column(Integer)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    part_replacement: Mapped["PartReplacement"] = relationship(back_populates="removed_part")
+    machine: Mapped["Machine"] = relationship()
+    credited_spare: Mapped["SparePart | None"] = relationship(back_populates="credited_removed_parts")
+    events: Mapped[list["RemovedPartEvent"]] = relationship(
+        back_populates="removed_part",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="RemovedPartEvent.at",
+    )
+
+    @property
+    def machine_name(self) -> str:
+        if self.machine is None:
+            return ""
+        return self.machine.name
+
+    @property
+    def fitted_part_name(self) -> str:
+        if self.part_replacement is None:
+            return self.part_name
+        return self.part_replacement.part_name
+
+    @property
+    def replaced_at(self) -> date:
+        if self.part_replacement is None:
+            return self.created_at.date() if self.created_at is not None else date.today()
+        return self.part_replacement.replaced_at
+
+    @property
+    def removed_by_name(self) -> str | None:
+        replacement = self.part_replacement
+        if replacement is None or replacement.replaced_by_user is None:
+            return None
+        return replacement.replaced_by_user.name
+
+    @property
+    def refurb_spare_name(self) -> str | None:
+        if self.credited_spare is None:
+            return None
+        return self.credited_spare.name
+
+    @property
+    def age_days(self) -> int:
+        from app.core.time import today_local
+
+        return (today_local() - self.replaced_at).days
+
+
+class RemovedPartEvent(Base):
+    """Append-only movement. Rows are inserted, never updated or deleted, except when the parent replacement is undone."""
+
+    __tablename__ = "removed_part_events"
+    __table_args__ = (Index("ix_removed_part_events_removed_part_id", "removed_part_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    removed_part_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("removed_parts.id", ondelete="CASCADE")
+    )
+    # removed_parts.status owns this type; reuse it (see user_role on the audit table).
+    status: Mapped[RemovedPartStatus] = mapped_column(
+        PGEnum(RemovedPartStatus, name="removed_part_status", create_type=False)
+    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    actor_name: Mapped[str] = mapped_column(String(255))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    notes: Mapped[str | None] = mapped_column(Text)
+    photo_url: Mapped[str | None] = mapped_column(String(512))
+    location: Mapped[str | None] = mapped_column(String(255))
+    vendor: Mapped[str | None] = mapped_column(String(255))
+    sent_on: Mapped[date | None] = mapped_column(Date)
+    spare_part_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("spare_parts.id", ondelete="SET NULL")
+    )
+    spare_part_name: Mapped[str | None] = mapped_column(String(255))
+    quantity: Mapped[int | None] = mapped_column(Integer)
+    scrap_on: Mapped[date | None] = mapped_column(Date)
+    scrap_qty: Mapped[float | None] = mapped_column(Float)
+    scrap_unit: Mapped[str | None] = mapped_column(String(32))
+    scrap_buyer: Mapped[str | None] = mapped_column(String(255))
+    sale_buyer: Mapped[str | None] = mapped_column(String(255))
+    sale_amount: Mapped[float | None] = mapped_column(Float)
+    sale_on: Mapped[date | None] = mapped_column(Date)
+    warranty_note: Mapped[str | None] = mapped_column(Text)
+
+    removed_part: Mapped["RemovedPart"] = relationship(back_populates="events")
 
 
 class RepairLog(Base):

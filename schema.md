@@ -107,6 +107,26 @@ Shift note on a machine so the next operator is not blind.
 | created_by | uuid, FK → users.id | |
 | created_at | timestamptz | |
 
+## `spare_parts`
+Plant stores stock. One row per item. The sheet area (Bearing, Rewinding, …) is `category`. A blank item group is stored as `""` so the unique key still holds.
+
+| column | type | notes |
+|---|---|---|
+| id | uuid, PK | |
+| name | text | trimmed item name |
+| item_group | text | `""` when the sheet left the group blank |
+| category | text | sheet / machine area |
+| qty_on_hand | float | |
+| unit | text, nullable | set when the sheet qty was `12 Mtr` or `2 pkt` |
+| min_qty | float, nullable | optional reorder point; not on the stock sheet |
+| machine_id | uuid, FK → machines.id, nullable | set when the area is obviously one machine. SET NULL if that machine is deleted |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+Unique on `(category, name, item_group)`.
+
+Low stock means on-hand is 0 or below, or `min_qty` is set and on-hand is at or below it.
+
 ## `part_replacements`
 | column | type | notes |
 |---|---|---|
@@ -116,6 +136,8 @@ Shift note on a machine so the next operator is not blind.
 | replaced_at | date | |
 | replaced_by | uuid, FK → users.id | |
 | notes | text | reason/condition of old part |
+| spare_part_id | uuid, FK → spare_parts.id, nullable | set only when this log took stock. RESTRICT: the spare row stays while a log points at it |
+| quantity_used | float, nullable | how many were deducted. Null when the log did not use stock. Deleting the log puts this many back |
 
 ## `repair_logs`
 | column | type | notes |
@@ -189,6 +211,8 @@ Unique on `(machine_id, log_date)` — saving is an upsert, since a second save 
 - `task_types` 1—N `checklist_items`
 - `task_instances` 1—N `checklist_item_results`
 - `machines` 1—N `part_replacements`
+- `machines` 1—N `spare_parts` (optional link)
+- `spare_parts` 1—N `part_replacements` (optional; only rows that deducted stock)
 - `machines` 1—N `repair_logs`
 - `machines` 1—N `handover_notes`
 - `machines` 1—N `shift_logs` (at most one per `log_date`)

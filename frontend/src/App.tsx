@@ -16,6 +16,7 @@ import { ReviewPage } from './pages/ReviewPage'
 import { WeeklyReportPage } from './pages/WeeklyReportPage'
 import { DirectoryPage } from './pages/DirectoryPage'
 import { ShiftLogsPage } from './pages/ShiftLogsPage'
+import { SparesPage } from './pages/SparesPage'
 
 function Layout() {
   return (
@@ -60,6 +61,7 @@ function AppRoutes() {
           </Route>
           <Route element={<RoleRoute roles={['admin', 'supervisor', 'management']} />}>
             <Route path="/shift" element={<ShiftLogsPage />} />
+            <Route path="/spares" element={<SparesPage />} />
             <Route path="/overdue" element={<OverduePage />} />
             <Route path="/summary" element={<SummaryPage />} />
             <Route path="/reports" element={<WeeklyReportPage />} />

@@ -11,6 +11,8 @@ export function createPartReplacement(payload: {
   partName: string
   replacedAt: string
   notes?: string
+  sparePartId?: string
+  quantityUsed?: number
 }): Promise<PartReplacement> {
   return apiFetch<PartReplacement>('/part-replacements', {
     method: 'POST',

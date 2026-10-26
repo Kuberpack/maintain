@@ -11,6 +11,10 @@ class PartReplacementCreate(CamelModel):
     part_name: str = Field(min_length=1, max_length=255)
     replaced_at: date
     notes: str | None = None
+    # Optional stock draw. Omitted (or null) keeps the old free-text log and
+    # does not change inventory. quantity_used defaults to 1 when a spare is set.
+    spare_part_id: uuid.UUID | None = None
+    quantity_used: float | None = Field(default=None, gt=0)
 
 
 class PartReplacementUpdate(CamelModel):
@@ -26,3 +30,5 @@ class PartReplacementPublic(CamelModel):
     replaced_at: date
     replaced_by: uuid.UUID | None
     notes: str | None
+    spare_part_id: uuid.UUID | None
+    quantity_used: float | None

@@ -65,6 +65,7 @@ type Msg = {
   replacedOn: string
   myMachine: string
   shift: string
+  spares: string
   shiftLog: string
   shiftLogSaved: string
   startTime: string
@@ -158,6 +159,7 @@ export const messages: Record<Locale, Msg> = {
     replacedOn: 'Replaced on',
     myMachine: 'My machine',
     shift: 'Shift',
+    spares: 'Spares',
     shiftLog: "Today's shift log",
     shiftLogSaved: 'Shift log saved',
     startTime: 'Start time',
@@ -251,6 +253,7 @@ export const messages: Record<Locale, Msg> = {
     replacedOn: 'कब बदला',
     myMachine: 'मेरी मशीन',
     shift: 'शिफ्ट',
+    spares: 'स्पेयर',
     shiftLog: 'आज का शिफ्ट लॉग',
     shiftLogSaved: 'शिफ्ट लॉग सेव हो गया',
     startTime: 'शुरू का समय',

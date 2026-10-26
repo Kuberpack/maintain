@@ -133,6 +133,21 @@ export interface PartReplacement {
   replacedAt: string
   replacedBy: string | null
   notes: string | null
+  sparePartId: string | null
+  quantityUsed: number | null
+}
+
+export interface SparePart {
+  id: string
+  name: string
+  itemGroup: string
+  category: string
+  qtyOnHand: number
+  unit: string | null
+  minQty: number | null
+  machineId: string | null
+  machineName: string | null
+  lowStock: boolean
 }
 
 export interface HandoverNote {

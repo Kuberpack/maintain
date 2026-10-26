@@ -421,7 +421,10 @@ export function MachineDetailPage() {
                 {entry.kind === 'part' && (
                   <p className="text-sm text-slate-700">
                     <span className="font-medium">Part replaced:</span> {entry.part.partName}{' '}
-                    <span className="text-slate-400">· {entry.part.replacedAt}</span>
+                    <span className="text-slate-400">
+                      · {entry.part.replacedAt}
+                      {entry.part.quantityUsed != null ? ` · ${entry.part.quantityUsed} from stock` : ''}
+                    </span>
                   </p>
                 )}
               </li>

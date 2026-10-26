@@ -2,7 +2,19 @@ import enum
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, Time, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.dialects.postgresql import UUID
@@ -190,6 +202,7 @@ class Machine(Base):
     vendor_contacts: Mapped[list["VendorContact"]] = relationship(
         back_populates="machine", cascade="all, delete-orphan"
     )
+    spare_parts: Mapped[list["SparePart"]] = relationship(back_populates="machine")
 
 
 class TaskType(Base):
@@ -318,11 +331,62 @@ class PartReplacement(Base):
     replaced_at: Mapped[date] = mapped_column(Date)
     replaced_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     notes: Mapped[str | None] = mapped_column(Text)
+    # Set together when this log deducted stock. Both stay null on a free-text
+    # log, so older rows and notes that never named a stock item do not move qty.
+    spare_part_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("spare_parts.id", ondelete="RESTRICT")
+    )
+    quantity_used: Mapped[float | None] = mapped_column(Float)
 
     machine: Mapped["Machine"] = relationship(back_populates="part_replacements")
     replaced_by_user: Mapped["User | None"] = relationship(
         foreign_keys=[replaced_by], back_populates="part_replacements"
     )
+    spare_part: Mapped["SparePart | None"] = relationship(back_populates="part_replacements")
+
+
+class SparePart(Base):
+    """One stocked spare. Identity is the sheet area plus the item name and group.
+
+    item_group is "" when the sheet left the group blank, so the unique key
+    still holds (Postgres treats NULLs as distinct).
+    """
+
+    __tablename__ = "spare_parts"
+    __table_args__ = (
+        UniqueConstraint("category", "name", "item_group", name="uq_spare_parts_identity"),
+        Index("ix_spare_parts_machine_id", "machine_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255))
+    item_group: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    category: Mapped[str] = mapped_column(String(100))
+    qty_on_hand: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str | None] = mapped_column(String(32))
+    min_qty: Mapped[float | None] = mapped_column(Float)
+    machine_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("machines.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    machine: Mapped["Machine | None"] = relationship(back_populates="spare_parts")
+    part_replacements: Mapped[list["PartReplacement"]] = relationship(back_populates="spare_part")
+
+    @property
+    def machine_name(self) -> str | None:
+        if self.machine is None:
+            return None
+        return self.machine.name
+
+    @property
+    def low_stock(self) -> bool:
+        if self.qty_on_hand <= 0:
+            return True
+        return self.min_qty is not None and self.qty_on_hand <= self.min_qty
 
 
 class RepairLog(Base):

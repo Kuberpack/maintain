@@ -38,6 +38,19 @@ class Settings(BaseSettings):
     alert_unreviewed_hours: int = 8
 
     local_timezone: str = "Asia/Kolkata"
+    # Empty-core gate when a new issue is raised for a roll/tape/coil.
+    # warn: issue proceeds and the slip carries a warning. block: issue is refused
+    # unless management or admin passes overrideMissingCores. Provisional — see CONFIRM_LATER.md.
+    consumable_core_policy: str = "warn"
+
+    @field_validator("consumable_core_policy")
+    @classmethod
+    def _core_policy(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if cleaned not in ("warn", "block"):
+            raise ValueError("consumable_core_policy must be warn or block")
+        return cleaned
+
     # Daily task instances appear at 08:00 local, alerts go out at 08:30 --
     # the half hour gives operators the work on screen before anyone's phone
     # buzzes about it.

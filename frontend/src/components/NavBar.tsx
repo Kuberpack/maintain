@@ -25,6 +25,7 @@ interface NavItem {
     | 'shift'
     | 'spares'
     | 'removedParts'
+    | 'store'
   end: boolean
   roles?: readonly UserRole[]
   badge?: 'review' | 'today'
@@ -34,6 +35,7 @@ const LINKS: NavItem[] = [
   { to: '/', labelKey: 'home', end: true, roles: ['admin', 'supervisor'] },
   { to: '/today', labelKey: 'today', end: false, badge: 'today' },
   { to: '/machines', labelKey: 'machines', end: true, roles: ['admin', 'supervisor', 'management'] },
+  { to: '/consumables', labelKey: 'store', end: false },
   { to: '/spares', labelKey: 'spares', end: false, roles: ['admin', 'supervisor', 'management'] },
   { to: '/removed', labelKey: 'removedParts', end: false, roles: ['admin', 'supervisor', 'management'] },
   { to: '/review', labelKey: 'review', end: false, roles: ['admin', 'supervisor'], badge: 'review' },
@@ -47,17 +49,17 @@ const LINKS: NavItem[] = [
 ]
 
 const DESKTOP_PRIMARY: Record<UserRole, string[]> = {
-  operator: ['/today', '/directory', '/profile'],
-  supervisor: ['/', '/today', '/review', '/overdue', '/machines', '/removed'],
-  management: ['/summary', '/reports', '/overdue', '/machines', '/removed'],
-  admin: ['/', '/today', '/review', '/machines', '/overdue'],
+  operator: ['/today', '/consumables', '/directory', '/profile'],
+  supervisor: ['/', '/consumables', '/today', '/review', '/overdue', '/machines'],
+  management: ['/summary', '/consumables', '/reports', '/machines', '/overdue'],
+  admin: ['/', '/consumables', '/today', '/review', '/machines'],
 }
 
 const MOBILE_TABS: Record<UserRole, string[]> = {
-  operator: ['/today', '/directory', '/profile'],
-  supervisor: ['/', '/review', '/overdue', '/machines'],
-  management: ['/summary', '/reports', '/overdue', '/machines'],
-  admin: ['/', '/review', '/today', '/machines'],
+  operator: ['/today', '/consumables', '/directory', '/profile'],
+  supervisor: ['/', '/consumables', '/review', '/machines'],
+  management: ['/summary', '/consumables', '/reports', '/machines'],
+  admin: ['/', '/consumables', '/review', '/machines'],
 }
 
 function isCurrent(link: NavItem, pathname: string): boolean {
@@ -396,6 +398,14 @@ function NavIcon({ name, active = false }: { name: string; active?: boolean }) {
         <circle cx="6" cy="12" r="1.4" fill={stroke} />
         <circle cx="12" cy="12" r="1.4" fill={stroke} />
         <circle cx="18" cy="12" r="1.4" fill={stroke} />
+      </svg>
+    )
+  }
+  if (name === 'store') {
+    return (
+      <svg {...common}>
+        <path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Z" stroke={stroke} strokeWidth="1.8" />
+        <path d="M8 8V6a4 4 0 0 1 8 0v2M9 13h6" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
       </svg>
     )
   }

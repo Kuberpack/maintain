@@ -137,6 +137,28 @@ docker compose exec backend python -m scripts.import_spares
 
 Rebuild the backend image first if this is the first time (`openpyxl` is installed from `requirements.txt`). Pass another `.xlsx` path as the first argument when the file is not the bundled one. The path is inside the container (`./backend` is mounted at `/app`).
 
+### Consumables (store issue slips)
+
+Adds the item master, digital store issue slip, MIN returns, shift-end close-out (including leakage), empty-core tracking, physical counts, and the management leakage / daily-sheet reports. Migration `c1a2b3c4d5e6`.
+
+**Back up the database before migrating. Do not run `docker compose down -v` — that deletes the Postgres volume.**
+
+```bash
+./scripts/backup.sh
+git pull
+docker compose exec backend alembic upgrade head
+docker compose exec backend python -m scripts.seed_consumables
+```
+
+Locally, from `backend/` with the venv:
+
+```bash
+.venv/bin/alembic upgrade head
+.venv/bin/python -m scripts.seed_consumables
+```
+
+The seed is safe to run again: items match by name and demo slips match a tag in the remark, so stock is not deducted twice. `app.seed` is still the destructive full-plant wipe — do not use it for this. Open points (real usage standards, warn vs block on a missing empty core, shift timings) are in `CONFIRM_LATER.md`. Empty-core behaviour defaults to warn; set `CONSUMABLE_CORE_POLICY=block` to refuse the next issue until the core is back.
+
 ### First real account (no wipe)
 
 For a real deployment, do **not** run `seed.py`. Create exactly one real admin or supervisor, then add the rest through the app:

@@ -118,6 +118,7 @@ type Msg = {
   due: string
   overdueBy: string
   removedParts: string
+  store: string
   oldPartSection: string
   oldPartCondition: string
   oldPartWhere: string
@@ -253,6 +254,7 @@ export const messages: Record<Locale, Msg> = {
     due: 'Due',
     overdueBy: 'Overdue by',
     removedParts: 'Removed parts',
+    store: 'Store',
     oldPartSection: 'Old part that came off',
     oldPartCondition: 'Condition',
     oldPartWhere: 'Where it is now',
@@ -386,6 +388,7 @@ export const messages: Record<Locale, Msg> = {
     due: 'तारीख',
     overdueBy: 'कितने दिन लेट',
     removedParts: 'निकाले गए पार्ट',
+    store: 'स्टोर',
     oldPartSection: 'जो पार्ट निकला',
     oldPartCondition: 'हालत',
     oldPartWhere: 'अभी कहाँ है',

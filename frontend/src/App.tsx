@@ -18,6 +18,10 @@ import { DirectoryPage } from './pages/DirectoryPage'
 import { ShiftLogsPage } from './pages/ShiftLogsPage'
 import { SparesPage } from './pages/SparesPage'
 import { RemovedPartsPage } from './pages/RemovedPartsPage'
+import { ConsumablesPage } from './pages/ConsumablesPage'
+import { ConsumableSlipPage } from './pages/ConsumableSlipPage'
+import { ConsumableItemsPage } from './pages/ConsumableItemsPage'
+import { ConsumableReportsPage } from './pages/ConsumableReportsPage'
 import { SupervisorDashboard } from './pages/SupervisorDashboard'
 import { BrandMark } from './components/BrandMark'
 import { useLocale } from './locale/localeContext'
@@ -68,8 +72,16 @@ function AppRoutes() {
           <Route path="/machines/:id" element={<MachineDetailPage />} />
           <Route path="/profile" element={<MyProfilePage />} />
           <Route path="/directory" element={<DirectoryPage />} />
+          <Route path="/consumables" element={<ConsumablesPage />} />
+          <Route path="/consumables/slips/:id" element={<ConsumableSlipPage />} />
           <Route element={<RoleRoute roles={['admin', 'supervisor']} />}>
             <Route path="/review" element={<ReviewPage />} />
+          </Route>
+          <Route element={<RoleRoute roles={['admin', 'supervisor', 'management']} />}>
+            <Route path="/consumables/items" element={<ConsumableItemsPage />} />
+          </Route>
+          <Route element={<RoleRoute roles={['admin', 'management']} />}>
+            <Route path="/consumables/reports" element={<ConsumableReportsPage />} />
           </Route>
           <Route element={<RoleRoute roles={['admin', 'supervisor', 'management']} />}>
             <Route path="/shift" element={<ShiftLogsPage />} />

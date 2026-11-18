@@ -11,14 +11,17 @@ from app.database import engine
 from app.routers import (
     auth,
     config,
+    consumables,
     contacts,
     handover,
     machines,
     part_replacements,
     photos,
+    removed_parts,
     repair_logs,
     reports,
     shift_logs,
+    spare_parts,
     task_instances,
     task_types,
     users,
@@ -61,6 +64,9 @@ app.include_router(users.router)
 app.include_router(task_instances.router)
 app.include_router(repair_logs.router)
 app.include_router(part_replacements.router)
+app.include_router(removed_parts.router)
+app.include_router(spare_parts.router)
+app.include_router(consumables.router)
 app.include_router(photos.router)
 app.include_router(handover.router)
 app.include_router(contacts.router)

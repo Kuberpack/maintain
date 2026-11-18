@@ -37,6 +37,13 @@ from app.database import SessionLocal
 from app.models import (
     ChecklistItem,
     ChecklistItemResult,
+    ConsumableCount,
+    ConsumableItem,
+    ConsumableMove,
+    ConsumableReturn,
+    ConsumableSlip,
+    ConsumableSlipCounter,
+    ConsumableSlipLine,
     HandoverNote,
     Machine,
     PartReplacement,
@@ -157,6 +164,15 @@ def create_machines_from_roster(db: Session, users_by_phone: dict[str, User]) ->
 
 
 def wipe_plant_data(db: Session, *, users: bool) -> None:
+    # Store slips point at machines with ON DELETE RESTRICT, so they have to
+    # go before the machine wipe. Bulk query.delete does not cascade.
+    db.query(ConsumableReturn).delete()
+    db.query(ConsumableMove).delete()
+    db.query(ConsumableSlipLine).delete()
+    db.query(ConsumableSlip).delete()
+    db.query(ConsumableCount).delete()
+    db.query(ConsumableSlipCounter).delete()
+    db.query(ConsumableItem).delete()
     db.query(ChecklistItemResult).delete()
     db.query(HandoverNote).delete()
     db.query(ShiftLog).delete()

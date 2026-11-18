@@ -126,6 +126,87 @@ export interface RepairLog {
   resolutionNotes: string | null
 }
 
+export type RemovedPartCondition = 'worn' | 'damaged' | 'broken' | 'reusable'
+export type RemovedPartStatus =
+  | 'pending_decision'
+  | 'in_maintenance_store'
+  | 'sent_for_repair'
+  | 'returned_to_stock'
+  | 'scrapped'
+  | 'sold'
+  | 'returned_to_vendor'
+
+export interface RemovedPartEvent {
+  id: string
+  status: RemovedPartStatus
+  actorId: string | null
+  actorName: string
+  at: string
+  notes: string | null
+  photoUrl: string | null
+  location: string | null
+  vendor: string | null
+  sentOn: string | null
+  sparePartId: string | null
+  sparePartName: string | null
+  quantity: number | null
+  scrapOn: string | null
+  scrapQty: number | null
+  scrapUnit: string | null
+  scrapBuyer: string | null
+  saleBuyer: string | null
+  saleAmount: number | null
+  saleOn: string | null
+  warrantyNote: string | null
+}
+
+export interface RemovedPart {
+  id: string
+  partReplacementId: string
+  machineId: string
+  machineName: string
+  partName: string
+  fittedPartName: string
+  replacedAt: string
+  removedByName: string | null
+  condition: RemovedPartCondition
+  status: RemovedPartStatus
+  quantity: number
+  location: string | null
+  notes: string | null
+  vendor: string | null
+  sentOn: string | null
+  scrapOn: string | null
+  scrapQty: number | null
+  scrapUnit: string | null
+  scrapBuyer: string | null
+  saleBuyer: string | null
+  saleAmount: number | null
+  saleOn: string | null
+  warrantyNote: string | null
+  refurbSpareName: string | null
+  creditedSparePartId: string | null
+  creditedQty: number | null
+  ageDays: number
+  createdAt: string
+  events: RemovedPartEvent[]
+}
+
+export interface RemovedPartsReport {
+  byStatus: { status: RemovedPartStatus; count: number }[]
+  pending: number
+  pendingOlderThanDays: number
+  staleDays: number
+  months: {
+    month: string
+    scrapCount: number
+    scrap: { unit: string; qty: number }[]
+    resaleCount: number
+    resaleAmount: number
+  }[]
+  machines: { machineId: string; machineName: string; replacements: number }[]
+}
+
 export interface PartReplacement {
   id: string
   machineId: string
@@ -133,6 +214,22 @@ export interface PartReplacement {
   replacedAt: string
   replacedBy: string | null
   notes: string | null
+  sparePartId: string | null
+  quantityUsed: number | null
+  removedPart: RemovedPart | null
+}
+
+export interface SparePart {
+  id: string
+  name: string
+  itemGroup: string
+  category: string
+  qtyOnHand: number
+  unit: string | null
+  minQty: number | null
+  machineId: string | null
+  machineName: string | null
+  lowStock: boolean
 }
 
 export interface HandoverNote {

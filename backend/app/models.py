@@ -2,7 +2,19 @@ import enum
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, Time, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.dialects.postgresql import UUID
@@ -87,6 +99,29 @@ class OutputUnit(str, enum.Enum):
 class MachineKind(str, enum.Enum):
     production = "production"
     utility = "utility"
+
+
+class RemovedPartCondition(str, enum.Enum):
+    worn = "worn"
+    damaged = "damaged"
+    broken = "broken"
+    reusable = "reusable"
+
+
+class RemovedPartStatus(str, enum.Enum):
+    """Where a part that came off a machine is right now.
+
+    pending_decision and in_maintenance_store are open. The rest are
+    dispositions: repair, refurbished stock, scrap, resale, or warranty.
+    """
+
+    pending_decision = "pending_decision"
+    in_maintenance_store = "in_maintenance_store"
+    sent_for_repair = "sent_for_repair"
+    returned_to_stock = "returned_to_stock"
+    scrapped = "scrapped"
+    sold = "sold"
+    returned_to_vendor = "returned_to_vendor"
 
 
 class User(Base):
@@ -190,6 +225,7 @@ class Machine(Base):
     vendor_contacts: Mapped[list["VendorContact"]] = relationship(
         back_populates="machine", cascade="all, delete-orphan"
     )
+    spare_parts: Mapped[list["SparePart"]] = relationship(back_populates="machine")
 
 
 class TaskType(Base):
@@ -318,11 +354,209 @@ class PartReplacement(Base):
     replaced_at: Mapped[date] = mapped_column(Date)
     replaced_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     notes: Mapped[str | None] = mapped_column(Text)
+    # Set together when this log deducted stock. Both stay null on a free-text
+    # log, so older rows and notes that never named a stock item do not move qty.
+    spare_part_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("spare_parts.id", ondelete="RESTRICT")
+    )
+    quantity_used: Mapped[int | None] = mapped_column(Integer)
 
     machine: Mapped["Machine"] = relationship(back_populates="part_replacements")
     replaced_by_user: Mapped["User | None"] = relationship(
         foreign_keys=[replaced_by], back_populates="part_replacements"
     )
+    spare_part: Mapped["SparePart | None"] = relationship(back_populates="part_replacements")
+    removed_part: Mapped["RemovedPart | None"] = relationship(
+        back_populates="part_replacement",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
+
+
+class SparePart(Base):
+    """One stocked spare. Identity is the sheet area plus the item name and group.
+
+    item_group is "" when the sheet left the group blank, so the unique key
+    still holds (Postgres treats NULLs as distinct).
+    """
+
+    __tablename__ = "spare_parts"
+    __table_args__ = (
+        UniqueConstraint("category", "name", "item_group", name="uq_spare_parts_identity"),
+        Index("ix_spare_parts_machine_id", "machine_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255))
+    item_group: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    category: Mapped[str] = mapped_column(String(100))
+    qty_on_hand: Mapped[int] = mapped_column(Integer)
+    unit: Mapped[str | None] = mapped_column(String(32))
+    min_qty: Mapped[int | None] = mapped_column(Integer)
+    machine_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("machines.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    machine: Mapped["Machine | None"] = relationship(back_populates="spare_parts")
+    part_replacements: Mapped[list["PartReplacement"]] = relationship(back_populates="spare_part")
+    credited_removed_parts: Mapped[list["RemovedPart"]] = relationship(back_populates="credited_spare")
+
+    @property
+    def machine_name(self) -> str | None:
+        if self.machine is None:
+            return None
+        return self.machine.name
+
+    @property
+    def low_stock(self) -> bool:
+        if self.qty_on_hand <= 0:
+            return True
+        return self.min_qty is not None and self.qty_on_hand <= self.min_qty
+
+
+class RemovedPart(Base):
+    """The old part that came off a machine when a replacement was logged.
+
+    One row per part replacement. Current condition, status, and disposition
+    details live here. Movement history is append-only on removed_part_events.
+    stock_credited is true only while a refurbished quantity is sitting on
+    credited_spare_part_id — undoing the replacement, or moving off
+    returned_to_stock, takes that quantity back out.
+    """
+
+    __tablename__ = "removed_parts"
+    __table_args__ = (
+        UniqueConstraint("part_replacement_id", name="uq_removed_parts_part_replacement_id"),
+        Index("ix_removed_parts_machine_id", "machine_id"),
+        Index("ix_removed_parts_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    part_replacement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("part_replacements.id", ondelete="CASCADE")
+    )
+    machine_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("machines.id", ondelete="CASCADE")
+    )
+    part_name: Mapped[str] = mapped_column(String(255))
+    condition: Mapped[RemovedPartCondition] = mapped_column(
+        SAEnum(RemovedPartCondition, name="removed_part_condition")
+    )
+    status: Mapped[RemovedPartStatus] = mapped_column(SAEnum(RemovedPartStatus, name="removed_part_status"))
+    quantity: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    location: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+    vendor: Mapped[str | None] = mapped_column(String(255))
+    sent_on: Mapped[date | None] = mapped_column(Date)
+    scrap_on: Mapped[date | None] = mapped_column(Date)
+    scrap_qty: Mapped[float | None] = mapped_column(Float)
+    scrap_unit: Mapped[str | None] = mapped_column(String(32))
+    scrap_buyer: Mapped[str | None] = mapped_column(String(255))
+    sale_buyer: Mapped[str | None] = mapped_column(String(255))
+    sale_amount: Mapped[float | None] = mapped_column(Float)
+    sale_on: Mapped[date | None] = mapped_column(Date)
+    warranty_note: Mapped[str | None] = mapped_column(Text)
+    stock_credited: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    credited_spare_part_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("spare_parts.id", ondelete="RESTRICT")
+    )
+    credited_qty: Mapped[int | None] = mapped_column(Integer)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    part_replacement: Mapped["PartReplacement"] = relationship(back_populates="removed_part")
+    machine: Mapped["Machine"] = relationship()
+    credited_spare: Mapped["SparePart | None"] = relationship(back_populates="credited_removed_parts")
+    events: Mapped[list["RemovedPartEvent"]] = relationship(
+        back_populates="removed_part",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="RemovedPartEvent.at",
+    )
+
+    @property
+    def machine_name(self) -> str:
+        if self.machine is None:
+            return ""
+        return self.machine.name
+
+    @property
+    def fitted_part_name(self) -> str:
+        if self.part_replacement is None:
+            return self.part_name
+        return self.part_replacement.part_name
+
+    @property
+    def replaced_at(self) -> date:
+        if self.part_replacement is None:
+            return self.created_at.date() if self.created_at is not None else date.today()
+        return self.part_replacement.replaced_at
+
+    @property
+    def removed_by_name(self) -> str | None:
+        replacement = self.part_replacement
+        if replacement is None or replacement.replaced_by_user is None:
+            return None
+        return replacement.replaced_by_user.name
+
+    @property
+    def refurb_spare_name(self) -> str | None:
+        if self.credited_spare is None:
+            return None
+        return self.credited_spare.name
+
+    @property
+    def age_days(self) -> int:
+        from app.core.time import today_local
+
+        return (today_local() - self.replaced_at).days
+
+
+class RemovedPartEvent(Base):
+    """Append-only movement. Rows are inserted, never updated or deleted, except when the parent replacement is undone."""
+
+    __tablename__ = "removed_part_events"
+    __table_args__ = (Index("ix_removed_part_events_removed_part_id", "removed_part_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    removed_part_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("removed_parts.id", ondelete="CASCADE")
+    )
+    # removed_parts.status owns this type; reuse it (see user_role on the audit table).
+    status: Mapped[RemovedPartStatus] = mapped_column(
+        PGEnum(RemovedPartStatus, name="removed_part_status", create_type=False)
+    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    actor_name: Mapped[str] = mapped_column(String(255))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    notes: Mapped[str | None] = mapped_column(Text)
+    photo_url: Mapped[str | None] = mapped_column(String(512))
+    location: Mapped[str | None] = mapped_column(String(255))
+    vendor: Mapped[str | None] = mapped_column(String(255))
+    sent_on: Mapped[date | None] = mapped_column(Date)
+    spare_part_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("spare_parts.id", ondelete="SET NULL")
+    )
+    spare_part_name: Mapped[str | None] = mapped_column(String(255))
+    quantity: Mapped[int | None] = mapped_column(Integer)
+    scrap_on: Mapped[date | None] = mapped_column(Date)
+    scrap_qty: Mapped[float | None] = mapped_column(Float)
+    scrap_unit: Mapped[str | None] = mapped_column(String(32))
+    scrap_buyer: Mapped[str | None] = mapped_column(String(255))
+    sale_buyer: Mapped[str | None] = mapped_column(String(255))
+    sale_amount: Mapped[float | None] = mapped_column(Float)
+    sale_on: Mapped[date | None] = mapped_column(Date)
+    warranty_note: Mapped[str | None] = mapped_column(Text)
+
+    removed_part: Mapped["RemovedPart"] = relationship(back_populates="events")
 
 
 class RepairLog(Base):
@@ -468,3 +702,218 @@ class ShiftLog(Base):
         start = self.start_time.hour * 60 + self.start_time.minute
         end = self.end_time.hour * 60 + self.end_time.minute
         return end - start if end >= start else end - start + 24 * 60
+
+
+class ConsumableItem(Base):
+    """Store item master for material issued to machines (wire, tape, starch, ink).
+
+    qty_on_hand is the book stock. Every change is also a consumable_moves row.
+    cores_outstanding counts issue lines whose empty core has not come back.
+    """
+
+    __tablename__ = "consumable_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
+    item_group: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    party_name: Mapped[str | None] = mapped_column(String(255))
+    party_address: Mapped[str | None] = mapped_column(String(512))
+    contact_no: Mapped[str | None] = mapped_column(String(32))
+    lead_time_days: Mapped[int | None] = mapped_column(Integer)
+    min_stock: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    max_stock: Mapped[float | None] = mapped_column(Float)
+    rate: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    unit: Mapped[str] = mapped_column(String(32))
+    qty_on_hand: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    tracks_empty_core: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    cores_outstanding: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Placeholder usage standard, e.g. 0.35 kg per 1000 boxes. Real numbers are unconfirmed.
+    standard_qty: Mapped[float | None] = mapped_column(Float)
+    standard_per: Mapped[float | None] = mapped_column(Float)
+    standard_basis: Mapped[str | None] = mapped_column(String(64))
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    moves: Mapped[list["ConsumableMove"]] = relationship(back_populates="item", passive_deletes=True)
+    lines: Mapped[list["ConsumableSlipLine"]] = relationship(back_populates="item", passive_deletes=True)
+    counts: Mapped[list["ConsumableCount"]] = relationship(back_populates="item", passive_deletes=True)
+
+    @property
+    def low_stock(self) -> bool:
+        if self.qty_on_hand <= 0:
+            return True
+        return self.qty_on_hand <= self.min_stock
+
+
+class ConsumableSlipCounter(Base):
+    """Last issued slip number for one Indian financial year (April–March), e.g. 2026-27."""
+
+    __tablename__ = "consumable_slip_counters"
+
+    financial_year: Mapped[str] = mapped_column(String(7), primary_key=True)
+    last_number: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+class ConsumableSlip(Base):
+    """Digital store issue slip. One number sequence per financial year."""
+
+    __tablename__ = "consumable_slips"
+    __table_args__ = (
+        UniqueConstraint("financial_year", "slip_no", name="uq_consumable_slips_fy_no"),
+        Index("ix_consumable_slips_machine_id", "machine_id"),
+        Index("ix_consumable_slips_received_by_id", "received_by_id"),
+        Index("ix_consumable_slips_slip_date", "slip_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    financial_year: Mapped[str] = mapped_column(String(7))
+    slip_no: Mapped[int] = mapped_column(Integer)
+    slip_date: Mapped[date] = mapped_column(Date)
+    shift: Mapped[str] = mapped_column(String(1))
+    department: Mapped[str] = mapped_column(String(255))
+    machine_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("machines.id", ondelete="RESTRICT"))
+    machine_name: Mapped[str] = mapped_column(String(255))
+    issued_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    issued_by_name: Mapped[str] = mapped_column(String(255))
+    received_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    received_by_name: Mapped[str] = mapped_column(String(255))
+    hod_name: Mapped[str | None] = mapped_column(String(255))
+    remark: Mapped[str | None] = mapped_column(Text)
+    supervisor_confirmed_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    supervisor_confirmed_name: Mapped[str | None] = mapped_column(String(255))
+    supervisor_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    supervisor_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    machine: Mapped["Machine"] = relationship()
+    lines: Mapped[list["ConsumableSlipLine"]] = relationship(
+        back_populates="slip",
+        cascade="all, delete-orphan",
+        order_by="ConsumableSlipLine.line_no",
+    )
+
+
+class ConsumableSlipLine(Base):
+    """One item on a store issue slip. Stock leaves the store when the line is created."""
+
+    __tablename__ = "consumable_slip_lines"
+    __table_args__ = (
+        Index("ix_consumable_slip_lines_slip_id", "slip_id"),
+        Index("ix_consumable_slip_lines_item_id", "item_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    slip_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("consumable_slips.id", ondelete="CASCADE")
+    )
+    line_no: Mapped[int] = mapped_column(Integer)
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("consumable_items.id", ondelete="RESTRICT")
+    )
+    item_name: Mapped[str] = mapped_column(String(255))
+    unit: Mapped[str] = mapped_column(String(32))
+    rate: Mapped[float] = mapped_column(Float)
+    qty_issued: Mapped[float] = mapped_column(Float)
+    qty_returned: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    qty_used: Mapped[float | None] = mapped_column(Float)
+    qty_carried: Mapped[float | None] = mapped_column(Float)
+    leakage_note: Mapped[str | None] = mapped_column(Text)
+    production_qty: Mapped[float | None] = mapped_column(Float)
+    expected_qty: Mapped[float | None] = mapped_column(Float)
+    variance_pct: Mapped[float | None] = mapped_column(Float)
+    core_due: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    core_returned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    core_returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    core_returned_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+    slip: Mapped["ConsumableSlip"] = relationship(back_populates="lines")
+    item: Mapped["ConsumableItem"] = relationship(back_populates="lines")
+    returns: Mapped[list["ConsumableReturn"]] = relationship(
+        back_populates="line", cascade="all, delete-orphan", order_by="ConsumableReturn.created_at"
+    )
+
+
+class ConsumableReturn(Base):
+    """Material return note (MIN) against one slip line. Stock goes back immediately."""
+
+    __tablename__ = "consumable_returns"
+    __table_args__ = (Index("ix_consumable_returns_line_id", "line_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    line_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("consumable_slip_lines.id", ondelete="CASCADE")
+    )
+    qty: Mapped[float] = mapped_column(Float)
+    note: Mapped[str | None] = mapped_column(Text)
+    returned_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    returned_by_name: Mapped[str] = mapped_column(String(255))
+    returned_on: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    line: Mapped["ConsumableSlipLine"] = relationship(back_populates="returns")
+
+
+class ConsumableMove(Base):
+    """Stock ledger. Book qty is the sum of qty_delta. Dates are plant-local days."""
+
+    __tablename__ = "consumable_moves"
+    __table_args__ = (Index("ix_consumable_moves_item_day", "item_id", "moved_on"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("consumable_items.id", ondelete="CASCADE")
+    )
+    # opening, inward, issue, return, count
+    kind: Mapped[str] = mapped_column(String(16))
+    qty_delta: Mapped[float] = mapped_column(Float)
+    moved_on: Mapped[date] = mapped_column(Date)
+    line_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("consumable_slip_lines.id", ondelete="CASCADE")
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    actor_name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    item: Mapped["ConsumableItem"] = relationship(back_populates="moves")
+
+
+class ConsumableCount(Base):
+    """A physical stock count against the book quantity. Book stock is set to the count."""
+
+    __tablename__ = "consumable_counts"
+    __table_args__ = (Index("ix_consumable_counts_item_id", "item_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("consumable_items.id", ondelete="CASCADE")
+    )
+    book_qty: Mapped[float] = mapped_column(Float)
+    counted_qty: Mapped[float] = mapped_column(Float)
+    variance: Mapped[float] = mapped_column(Float)
+    note: Mapped[str | None] = mapped_column(Text)
+    counted_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    counted_by_name: Mapped[str] = mapped_column(String(255))
+    counted_on: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    item: Mapped["ConsumableItem"] = relationship(back_populates="counts")

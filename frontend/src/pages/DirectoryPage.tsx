@@ -48,8 +48,8 @@ export function DirectoryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-4 pb-16">
-      <h1 className="mb-1 text-2xl font-bold text-slate-900">{t.directory}</h1>
+    <div className="mx-auto w-full max-w-3xl px-4 pt-5 pb-6 sm:px-6 lg:pt-7">
+      <h1 className="mb-1 text-2xl font-bold tracking-tight text-ink sm:text-3xl">{t.directory}</h1>
       <p className="mb-4 text-base text-slate-600">
         {locale === 'hi'
           ? 'मशीन में मैकेनिकल दिक्कत हो तो बाहर से इन्हें बुलाएँ।'

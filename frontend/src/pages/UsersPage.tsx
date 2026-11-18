@@ -73,8 +73,8 @@ export function UsersPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-4">
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">Users</h1>
+    <div className="mx-auto w-full max-w-3xl px-4 pt-5 pb-6 sm:px-6 lg:pt-7">
+      <h1 className="mb-4 text-2xl font-bold tracking-tight text-ink sm:text-3xl">Users</h1>
 
       {canCreate &&
         (creating ? (
@@ -102,7 +102,7 @@ export function UsersPage() {
 
       <ul className="flex flex-col gap-2">
         {userList.map((u) => (
-          <li key={u.id} className="rounded-md border border-slate-200 p-3">
+          <li key={u.id} className="rounded-2xl border border-line bg-white p-4 shadow-sm">
             {editingId === u.id ? (
               <EditUserForm
                 user={u}

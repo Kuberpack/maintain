@@ -5,7 +5,7 @@ import { getMachine, deleteMachine } from '../api/machines'
 import { listTaskTypes } from '../api/taskTypes'
 import { listTaskInstances, markTaskInstanceDone, reopenTaskInstance } from '../api/taskInstances'
 import { listRepairLogs } from '../api/repairLogs'
-import { listPartReplacements } from '../api/partReplacements'
+import { deletePartReplacement, listPartReplacements } from '../api/partReplacements'
 import { listHandoverNotes } from '../api/handover'
 import { listUsers } from '../api/users'
 import { getPublicConfig } from '../api/config'
@@ -24,6 +24,7 @@ import { ResolveRepairLogForm } from '../components/ResolveRepairLogForm'
 import { HandoverForm } from '../components/HandoverForm'
 import { MachineQr } from '../components/MachineQr'
 import { ProofPhoto } from '../components/ProofPhoto'
+import { CONDITION_LABEL, STATUS_LABEL, eventDetail, formatWhen } from '../lib/removedParts'
 import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
 import { hi } from '../lib/i18n'
@@ -59,6 +60,8 @@ export function MachineDetailPage() {
   const [historyChecklistId, setHistoryChecklistId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [reopeningId, setReopeningId] = useState<string | null>(null)
+  const [undoingId, setUndoingId] = useState<string | null>(null)
+  const [undoError, setUndoError] = useState<string | null>(null)
   const [reopenError, setReopenError] = useState<string | null>(null)
   const [photos, setPhotos] = useState<Record<string, File | null>>({})
   const [deletingMachine, setDeletingMachine] = useState(false)
@@ -154,6 +157,23 @@ export function MachineDetailPage() {
     }
   }
 
+  async function handleUndoReplacement(partReplacementId: string) {
+    const confirmed = window.confirm(
+      'Undo this part replacement? Stock taken for the new part is put back. If the old part was returned to spares, that quantity is taken out again.',
+    )
+    if (!confirmed) return
+    setUndoError(null)
+    setUndoingId(partReplacementId)
+    try {
+      await deletePartReplacement(partReplacementId)
+      await partReplacements.refetch()
+    } catch (err) {
+      setUndoError(err instanceof ApiError ? err.message : 'Could not undo part replacement')
+    } finally {
+      setUndoingId(null)
+    }
+  }
+
   const pendingInstances = taskInstanceList
     .filter((ti) => ti.status !== 'done')
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
@@ -167,10 +187,10 @@ export function MachineDetailPage() {
   ].sort((a, b) => b.date.localeCompare(a.date))
 
   return (
-    <div className="mx-auto max-w-3xl p-4">
+    <div className="mx-auto w-full max-w-3xl px-4 pt-5 pb-6 sm:px-6 lg:pt-7">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{machineData.name}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">{machineData.name}</h1>
           <p className="text-sm text-slate-500">
             {machineData.type}
             {machineData.location ? ` · ${machineData.location}` : ''}
@@ -329,6 +349,7 @@ export function MachineDetailPage() {
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">History</h2>
         {reopenError && <p className="mb-2 text-sm text-red-600">{reopenError}</p>}
+        {undoError && <p className="mb-2 text-sm text-red-600">{undoError}</p>}
         {timeline.length === 0 ? (
           <p className="text-sm text-slate-500">No history yet.</p>
         ) : (
@@ -419,10 +440,52 @@ export function MachineDetailPage() {
                   </div>
                 )}
                 {entry.kind === 'part' && (
-                  <p className="text-sm text-slate-700">
-                    <span className="font-medium">Part replaced:</span> {entry.part.partName}{' '}
-                    <span className="text-slate-400">· {entry.part.replacedAt}</span>
-                  </p>
+                  <div>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-sm text-slate-700">
+                        <span className="font-medium">Part replaced:</span> {entry.part.partName}{' '}
+                        <span className="text-slate-400">
+                          · {entry.part.replacedAt}
+                          {entry.part.quantityUsed != null ? ` · ${entry.part.quantityUsed} from stock` : ''}
+                        </span>
+                      </p>
+                      {canManageSetup && (
+                        <button
+                          type="button"
+                          onClick={() => void handleUndoReplacement(entry.part.id)}
+                          disabled={undoingId === entry.part.id}
+                          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          {undoingId === entry.part.id ? 'Undoing…' : 'Undo'}
+                        </button>
+                      )}
+                    </div>
+                    {entry.part.removedPart && (
+                      <div className="mt-2 border-t border-slate-100 pt-2">
+                        <p className="text-sm text-slate-700">
+                          <span className="font-medium">Came off:</span> {entry.part.removedPart.partName} ·{' '}
+                          {CONDITION_LABEL[entry.part.removedPart.condition]} · {STATUS_LABEL[entry.part.removedPart.status]}
+                          {entry.part.removedPart.location ? ` · ${entry.part.removedPart.location}` : ''}
+                          {entry.part.removedPart.quantity > 1 ? ` · ${entry.part.removedPart.quantity}` : ''}
+                        </p>
+                        {entry.part.removedPart.events.length > 0 && (
+                          <ul className="mt-1 flex flex-col gap-1">
+                            {entry.part.removedPart.events.map((event) => (
+                              <li key={event.id} className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                <span>
+                                  {formatWhen(event.at)} · {event.actorName} · {STATUS_LABEL[event.status]}
+                                  {eventDetail(event) ? ` · ${eventDetail(event)}` : ''}
+                                </span>
+                                {event.photoUrl && (
+                                  <ProofPhoto url={event.photoUrl} alt="Removed part" className="h-10 w-10 rounded object-cover" zoomable />
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </li>
             ))}

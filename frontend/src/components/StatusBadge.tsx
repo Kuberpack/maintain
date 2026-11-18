@@ -13,7 +13,7 @@ export function StatusBadge({ status }: { status: DisplayStatus }) {
   const style = STYLES[status]
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-sm font-medium"
+      className="inline-flex max-w-full shrink-0 items-center rounded-full px-2.5 py-1 text-center text-xs font-semibold leading-tight sm:text-sm"
       style={{ backgroundColor: style.bg, color: style.text }}
     >
       {style.label}
